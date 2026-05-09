@@ -22,7 +22,7 @@ export default function ModeToggle({ mode, onToggle }: Props) {
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)";
         (e.currentTarget as HTMLElement).style.boxShadow =
-          "0 4px 24px rgba(232,130,106,0.2)";
+          "0 4px 24px rgba(0,113,227,0.2)";
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLElement).style.borderColor = "var(--border-hover)";

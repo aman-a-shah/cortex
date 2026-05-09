@@ -27,15 +27,14 @@ export default function Sidebar({ activeDept, onDeptChange }: Props) {
         background: "var(--surface)",
       }}
     >
-      {/* Logo mark */}
       <div className="mb-4 mt-1" title="Cortex">
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-          <circle cx="11" cy="11" r="10" stroke="var(--accent)" strokeWidth="1.5" />
-          <circle cx="11" cy="11" r="4" fill="var(--accent)" opacity="0.8" />
-          <line x1="11" y1="1" x2="11" y2="7" stroke="var(--accent)" strokeWidth="1.5" />
-          <line x1="11" y1="15" x2="11" y2="21" stroke="var(--accent)" strokeWidth="1.5" />
-          <line x1="1" y1="11" x2="7" y2="11" stroke="var(--accent)" strokeWidth="1.5" />
-          <line x1="15" y1="11" x2="21" y2="11" stroke="var(--accent)" strokeWidth="1.5" />
+          <circle cx="11" cy="11" r="10" stroke="var(--text-primary)" strokeWidth="1.5" />
+          <circle cx="11" cy="11" r="4" fill="var(--text-primary)" opacity="0.8" />
+          <line x1="11" y1="1" x2="11" y2="7" stroke="var(--text-primary)" strokeWidth="1.5" />
+          <line x1="11" y1="15" x2="11" y2="21" stroke="var(--text-primary)" strokeWidth="1.5" />
+          <line x1="1" y1="11" x2="7" y2="11" stroke="var(--text-primary)" strokeWidth="1.5" />
+          <line x1="15" y1="11" x2="21" y2="11" stroke="var(--text-primary)" strokeWidth="1.5" />
         </svg>
       </div>
 

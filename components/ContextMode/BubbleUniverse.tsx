@@ -98,10 +98,12 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
         "collision",
         d3.forceCollide<BubbleNode>().radius((n) => n.r + 12).strength(0.85)
       )
-      .alphaDecay(0.015)
+      .alphaTarget(0.02)
       .on("tick", () => {
-        // Clamp to container bounds
+        // Clamp to container bounds and add organic random movement
         for (const node of nextNodes) {
+          node.vx = (node.vx ?? 0) + (Math.random() - 0.5) * 0.4;
+          node.vy = (node.vy ?? 0) + (Math.random() - 0.5) * 0.4;
           node.x = Math.max(node.r + 20, Math.min(w - node.r - 20, node.x ?? w / 2));
           node.y = Math.max(node.r + 20, Math.min(h - node.r - 60, node.y ?? h / 2));
         }
@@ -132,9 +134,9 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
       <svg width={w} height={h} style={{ display: "block", overflow: "visible" }}>
         <defs>
           {Object.entries(DEPT_CONFIG).map(([dept, cfg]) => (
-            <radialGradient key={dept} id={`grad-${dept}`} cx="38%" cy="32%" r="65%">
-              <stop offset="0%" stopColor={cfg.color} stopOpacity="0.4" />
-              <stop offset="100%" stopColor={cfg.color} stopOpacity="0.1" />
+            <radialGradient key={dept} id={`grad-${dept}`} cx="30%" cy="30%" r="70%">
+              <stop offset="0%" stopColor={cfg.color} stopOpacity="0.25" />
+              <stop offset="100%" stopColor={cfg.color} stopOpacity="0.05" />
             </radialGradient>
           ))}
         </defs>
@@ -152,13 +154,14 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
             <g
               key={node.id}
               style={{ cursor: "pointer" }}
+              transform={`translate(${nx}, ${ny})`}
               onClick={() => onBubbleClick(node.entry)}
             >
               {/* New bubble ring pulse */}
               {node.isNew && (
                 <circle
-                  cx={nx}
-                  cy={ny}
+                  cx={0}
+                  cy={0}
                   r={node.r * 1.1}
                   fill="none"
                   stroke={node.color}
@@ -172,35 +175,34 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
 
               {/* Main bubble */}
               <circle
-                cx={nx}
-                cy={ny}
+                cx={0}
+                cy={0}
                 r={node.r}
                 fill={`url(#grad-${node.entry.department})`}
                 stroke={node.color}
                 strokeWidth={0.8 + proximity * 1.2}
-                strokeOpacity={0.35 + proximity * 0.5}
+                strokeOpacity={0.25 + proximity * 0.4}
                 style={{
                   filter:
                     glowSize > 1
-                      ? `drop-shadow(0 0 ${glowSize}px ${node.color})`
+                      ? `drop-shadow(0 4px ${glowSize}px rgba(0,0,0,0.5))`
                       : undefined,
                   transition: "filter 0.1s ease, stroke-width 0.1s ease",
-                  animation: node.isNew
-                    ? "bubble-arrive 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards"
-                    : undefined,
+                  animation: `bubble-wobble ${3 + (node.entry.tokenCount % 3)}s ease-in-out infinite alternate${node.isNew ? ", bubble-arrive 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards" : ""}`,
                 }}
               />
 
               {/* Department emoji */}
               <text
-                x={nx}
-                y={ny - 7}
+                x={0}
+                y={-7}
                 textAnchor="middle"
                 dominantBaseline="middle"
                 style={{
-                  fontSize: Math.max(14, node.r * 0.32),
+                  fontSize: Math.max(16, node.r * 0.35),
                   pointerEvents: "none",
                   userSelect: "none",
+                  fill: node.color,
                 }}
               >
                 {DEPT_CONFIG[node.entry.department].emoji}
@@ -208,8 +210,8 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
 
               {/* Token label */}
               <text
-                x={nx}
-                y={ny + 13}
+                x={0}
+                y={13}
                 textAnchor="middle"
                 dominantBaseline="middle"
                 fill={`rgba(255,255,255,${0.25 + proximity * 0.3})`}
@@ -224,8 +226,8 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
 
               {/* Department label below */}
               <text
-                x={nx}
-                y={ny + node.r + 16}
+                x={0}
+                y={node.r + 16}
                 textAnchor="middle"
                 fill={`rgba(255,255,255,${0.2 + proximity * 0.25})`}
                 style={{

@@ -22,12 +22,12 @@ export default function ContextMode() {
         >
           <div className="flex items-center gap-3">
             <svg width="18" height="18" viewBox="0 0 22 22" fill="none">
-              <circle cx="11" cy="11" r="10" stroke="var(--accent)" strokeWidth="1.5" />
-              <circle cx="11" cy="11" r="4" fill="var(--accent)" opacity="0.8" />
-              <line x1="11" y1="1" x2="11" y2="7" stroke="var(--accent)" strokeWidth="1.5" />
-              <line x1="11" y1="15" x2="11" y2="21" stroke="var(--accent)" strokeWidth="1.5" />
-              <line x1="1" y1="11" x2="7" y2="11" stroke="var(--accent)" strokeWidth="1.5" />
-              <line x1="15" y1="11" x2="21" y2="11" stroke="var(--accent)" strokeWidth="1.5" />
+              <circle cx="11" cy="11" r="10" stroke="var(--text-primary)" strokeWidth="1.5" />
+              <circle cx="11" cy="11" r="4" fill="var(--text-primary)" opacity="0.8" />
+              <line x1="11" y1="1" x2="11" y2="7" stroke="var(--text-primary)" strokeWidth="1.5" />
+              <line x1="11" y1="15" x2="11" y2="21" stroke="var(--text-primary)" strokeWidth="1.5" />
+              <line x1="1" y1="11" x2="7" y2="11" stroke="var(--text-primary)" strokeWidth="1.5" />
+              <line x1="15" y1="11" x2="21" y2="11" stroke="var(--text-primary)" strokeWidth="1.5" />
             </svg>
             <span
               className="text-sm font-medium"
@@ -55,14 +55,7 @@ export default function ContextMode() {
           <BubbleUniverse entries={entries} onBubbleClick={setSelected} />
         </div>
 
-        {/* Ambient background gradient */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(ellipse at 50% 50%, rgba(232,130,106,0.03) 0%, transparent 70%)",
-          }}
-        />
+        {/* No Ambient background gradient for Apple aesthetic */}
       </div>
 
       {/* Live feed panel */}

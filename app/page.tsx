@@ -68,58 +68,53 @@ export default function Home() {
     setAppState("transitioning");
   }, [mode, appState]);
 
-  // Curtain transition effect
+  // Crack transition effect
   useEffect(() => {
     if (appState !== "transitioning" || pendingMode === null) return;
 
-    const outgoingEl = mode === "chat" ? chatRef.current : contextRef.current;
+    const topLayer = chatRef.current;
+    if (!topLayer) return;
 
-    if (!outgoingEl) {
-      setMode(pendingMode);
-      setPendingMode(null);
-      setAppState("ready");
-      return;
-    }
+    const polyClosed = "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, 50% 0%, 48% 20%, 52% 40%, 49% 60%, 51% 80%, 50% 100%, 50% 100%, 51% 80%, 49% 60%, 52% 40%, 48% 20%, 50% 0%)";
+    const polyOpen = "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, -10% 0%, -12% 20%, -8% 40%, -11% 60%, -9% 80%, -10% 100%, 110% 100%, 111% 80%, 109% 60%, 112% 40%, 108% 20%, 110% 0%)";
 
-    // Animate outgoing layer: split from center outward then collapse to nothing
-    outgoingEl.style.transition = "none";
-    outgoingEl.style.clipPath = "inset(0 0% 0 0%)";
-    outgoingEl.style.opacity = "1";
+    topLayer.style.transition = "none";
 
-    requestAnimationFrame(() => {
+    if (pendingMode === "context") {
+      // Opening
+      topLayer.style.clipPath = polyClosed;
+      topLayer.style.opacity = "1";
       requestAnimationFrame(() => {
-        outgoingEl.style.transition =
-          "clip-path 0.48s cubic-bezier(0.76, 0, 0.24, 1), opacity 0.48s ease";
-        outgoingEl.style.clipPath = "inset(0 50% 0 50%)";
-        outgoingEl.style.opacity = "0";
+        requestAnimationFrame(() => {
+          topLayer.style.transition = "clip-path 0.7s cubic-bezier(0.8, 0, 0.2, 1), opacity 0.5s ease 0.2s";
+          topLayer.style.clipPath = polyOpen;
+          topLayer.style.opacity = "0";
+        });
       });
-    });
+    } else {
+      // Closing
+      topLayer.style.clipPath = polyOpen;
+      topLayer.style.opacity = "0";
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          topLayer.style.transition = "clip-path 0.7s cubic-bezier(0.8, 0, 0.2, 1), opacity 0.3s ease";
+          topLayer.style.clipPath = polyClosed;
+          topLayer.style.opacity = "1";
+        });
+      });
+    }
 
     const timer = setTimeout(() => {
       setMode(pendingMode);
       setPendingMode(null);
       setAppState("ready");
-
-      // Animate incoming layer: expand from center
-      const incomingEl =
-        pendingMode === "chat" ? chatRef.current : contextRef.current;
-      if (incomingEl) {
-        incomingEl.style.transition = "none";
-        incomingEl.style.clipPath = "inset(0 50% 0 50%)";
-        incomingEl.style.opacity = "0";
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            incomingEl.style.transition =
-              "clip-path 0.48s cubic-bezier(0.76, 0, 0.24, 1), opacity 0.48s ease";
-            incomingEl.style.clipPath = "inset(0 0% 0 0%)";
-            incomingEl.style.opacity = "1";
-          });
-        });
-      }
-    }, 500);
+      topLayer.style.transition = "none";
+      topLayer.style.clipPath = "none";
+      topLayer.style.opacity = pendingMode === "chat" ? "1" : "0";
+    }, 750);
 
     return () => clearTimeout(timer);
-  }, [appState, pendingMode, mode]);
+  }, [appState, pendingMode]);
 
   return (
     <div className="h-full relative overflow-hidden" style={{ background: "var(--bg)" }}>
@@ -140,7 +135,7 @@ export default function Home() {
             className="absolute inset-0"
             style={{
               visibility: mode === "context" || appState === "transitioning" ? "visible" : "hidden",
-              zIndex: mode === "context" ? 2 : 1,
+              zIndex: 1,
             }}
           >
             <ContextMode />
@@ -152,7 +147,8 @@ export default function Home() {
             className="absolute inset-0"
             style={{
               visibility: mode === "chat" || appState === "transitioning" ? "visible" : "hidden",
-              zIndex: mode === "chat" ? 2 : 1,
+              zIndex: 2,
+              pointerEvents: mode === "chat" && appState !== "transitioning" ? "auto" : "none",
             }}
           >
             <ChatMode initialDept={session.department} onLogout={handleLogout} />

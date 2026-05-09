@@ -62,8 +62,8 @@ export default function ContextDetail({ entry, onClose }: Props) {
         </div>
 
         <p
-          className="text-xs mb-3 font-medium"
-          style={{ color: "var(--accent)" }}
+          className="text-xs mb-3 font-semibold"
+          style={{ color: "var(--text-primary)" }}
         >
           {entry.summary}
         </p>

@@ -59,14 +59,7 @@ export default function LoginScreen({ onLogin }: Props) {
       className="fixed inset-0 flex items-center justify-center z-20"
       style={{ background: "var(--bg)" }}
     >
-      {/* Ambient glow */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse at 50% 45%, rgba(232,130,106,0.05) 0%, transparent 65%)",
-        }}
-      />
+      {/* No ambient glow for Apple aesthetic */}
 
       <div
         className="relative w-full max-w-md mx-4 rounded-2xl p-8"
@@ -78,21 +71,21 @@ export default function LoginScreen({ onLogin }: Props) {
       >
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <svg width="32" height="32" viewBox="0 0 22 22" fill="none" className="mb-3">
-            <circle cx="11" cy="11" r="10" stroke="var(--accent)" strokeWidth="1.5" />
-            <circle cx="11" cy="11" r="4" fill="var(--accent)" opacity="0.85" />
-            <line x1="11" y1="1" x2="11" y2="7" stroke="var(--accent)" strokeWidth="1.5" />
-            <line x1="11" y1="15" x2="11" y2="21" stroke="var(--accent)" strokeWidth="1.5" />
-            <line x1="1" y1="11" x2="7" y2="11" stroke="var(--accent)" strokeWidth="1.5" />
-            <line x1="15" y1="11" x2="21" y2="11" stroke="var(--accent)" strokeWidth="1.5" />
+          <svg width="32" height="32" viewBox="0 0 22 22" fill="none" className="mb-4">
+            <circle cx="11" cy="11" r="10" stroke="var(--text-primary)" strokeWidth="1.5" />
+            <circle cx="11" cy="11" r="4" fill="var(--text-primary)" opacity="0.85" />
+            <line x1="11" y1="1" x2="11" y2="7" stroke="var(--text-primary)" strokeWidth="1.5" />
+            <line x1="11" y1="15" x2="11" y2="21" stroke="var(--text-primary)" strokeWidth="1.5" />
+            <line x1="1" y1="11" x2="7" y2="11" stroke="var(--text-primary)" strokeWidth="1.5" />
+            <line x1="15" y1="11" x2="21" y2="11" stroke="var(--text-primary)" strokeWidth="1.5" />
           </svg>
           <h1
-            className="text-xl font-light tracking-widest"
-            style={{ color: "var(--text-primary)", letterSpacing: "0.18em" }}
+            className="text-2xl font-semibold tracking-widest"
+            style={{ color: "var(--text-primary)", letterSpacing: "0.15em" }}
           >
             CORTEX
           </h1>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
             GLOBAL CONTEXT · SECURED BY CYSTACK
           </p>
         </div>
