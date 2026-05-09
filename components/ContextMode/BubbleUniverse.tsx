@@ -529,7 +529,7 @@ export default function BubbleUniverse({ entries }: Props) {
             vpAnimRef.current = { start: { ...viewportRef.current }, target: { x: 0, y: 0, scale: 1 }, startTime: -1, duration: 420 };
           } else {
             const { w, h } = dimsRef.current;
-            const scale = 1.04;
+            const scale = 1.45;
             const nx = node.x ?? w / 2;
             const ny = node.y ?? h / 2;
             setFocusedId(ds.nodeId);
@@ -707,40 +707,115 @@ export default function BubbleUniverse({ entries }: Props) {
                     style={{ pointerEvents: "none" }} />
                 )}
 
-                {/* Orbiting context labels — visible when focused */}
+                {/* Solar system orbit — SMIL animateTransform, no CSS conflict */}
                 {isFocused && (() => {
                   const isLoading = tagsLoading && focusedTags.length === 0;
                   const items = isLoading
-                    ? ["analyzing…", "context", "loading", "tags", "…"]
+                    ? ["analyzing…", "loading…", "context", "scanning", "tags…"]
                     : focusedTags;
                   if (items.length === 0) return null;
-                  const t = orbitTimeRef.current;
-                  return items.map((item, idx) => {
-                    const ring      = idx % 3;
-                    const ringR     = node.r + [68, 110, 152][ring];
-                    const speed     = [0.000055, 0.00004, 0.000028][ring] * (ring % 2 === 0 ? 1 : -1);
-                    const baseAngle = (idx / items.length) * Math.PI * 2;
-                    const angle     = baseAngle + t * speed;
-                    const ox = Math.cos(angle) * ringR;
-                    const oy = Math.sin(angle) * ringR;
-                    const tw = Math.min(item.length * 6.2 + 16, 130);
-                    const pulse = isLoading
-                      ? 0.3 + 0.2 * Math.sin(t * 0.003 + idx * 1.3)
-                      : 0.55 + 0.35 * Math.sin(t * 0.0009 + idx * 1.3);
-                    return (
-                      <g key={isLoading ? `loading-${idx}` : item} transform={`translate(${ox},${oy})`} style={{ pointerEvents: "none", animation: `orbit-fade-in 0.5s cubic-bezier(0.22,1,0.36,1) ${idx * 0.06}s both` }}>
-                        <rect x={-tw / 2} y={-9} width={tw} height={18} rx={5}
-                          fill={node.color + (isLoading ? "08" : "14")}
-                          stroke={node.color + (isLoading ? "28" : "50")}
-                          strokeWidth={0.5} />
-                        <text textAnchor="middle" dominantBaseline="middle"
-                          fill={node.color} opacity={pulse}
-                          style={{ fontSize: 8, userSelect: "none" }}>
-                          {item}
-                        </text>
-                      </g>
+
+                  // Distribute items across 3 rings
+                  const ring0 = items.filter((_, i) => i % 3 === 0);
+                  const ring1 = items.filter((_, i) => i % 3 === 1);
+                  const ring2 = items.filter((_, i) => i % 3 === 2);
+                  const rings = [ring0, ring1, ring2];
+                  // Radii from bubble center — clearly separated like planets
+                  const radii    = [node.r + 60, node.r + 112, node.r + 172];
+                  // Orbit durations (inner = fastest, outer = slowest)
+                  const durations = [26, 42, 62];
+                  // Alternating orbit directions (360=CW, -360=CCW)
+                  const toAngles  = [360, -360, 360];
+
+                  const out: React.ReactNode[] = [];
+
+                  // Faint dashed orbital path circles
+                  rings.forEach((ringItems, ri) => {
+                    if (ringItems.length === 0) return;
+                    out.push(
+                      <circle key={`path-${ri}`} r={radii[ri]}
+                        fill="none" stroke={node.color}
+                        strokeOpacity={isLoading ? 0.05 : 0.11}
+                        strokeWidth={0.4} strokeDasharray="4 10"
+                        style={{ pointerEvents: "none" }} />
                     );
                   });
+
+                  // Items on each ring
+                  rings.forEach((ringItems, ri) => {
+                    if (ringItems.length === 0) return;
+                    const r        = radii[ri];
+                    const dur      = durations[ri];
+                    const toAngle  = toAngles[ri];
+                    // Counter-rotation cancels parent rotation so text stays upright
+                    const ctrAngle = -toAngle;
+
+                    ringItems.forEach((item, ji) => {
+                      const tw = Math.min(item.length * 6.5 + 18, 148);
+                      // Negative begin spreads items around the ring at t=0
+                      const fraction = ji / Math.max(ringItems.length, 1);
+                      const begin    = `${(-(fraction * dur)).toFixed(2)}s`;
+                      const fadeDelay = `${((ri * 3 + ji) * 0.07).toFixed(2)}s`;
+
+                      out.push(
+                        // Fade-in wrapper — pure opacity, no transform so it doesn't interfere
+                        <g key={isLoading ? `l${ri}-${ji}` : `${ri}-${item}`}
+                          style={{
+                            animation: `orbit-fade-in 0.55s ease ${fadeDelay} both`,
+                            pointerEvents: "none",
+                          }}>
+                          <g>
+                            <animateTransform
+                              attributeName="transform"
+                              type="rotate"
+                              from={`0 0 0`}
+                              to={`${toAngle} 0 0`}
+                              dur={`${dur}s`}
+                              repeatCount="indefinite"
+                              begin={begin}
+                            />
+
+                            {/* Spoke line from bubble edge outward (in orbit-rotated space) */}
+                            <line
+                              x1={node.r + 5} y1={0}
+                              x2={r - tw / 2 - 6} y2={0}
+                              stroke={node.color} strokeWidth={0.5}
+                              strokeOpacity={isLoading ? 0.08 : 0.20} />
+
+                            {/* Planet dot sitting on the orbital path */}
+                            <circle cx={r} cy={0} r={2.5}
+                              fill={node.color} opacity={0.38} />
+
+                            <g transform={`translate(${r}, 0)`}>
+                              <animateTransform
+                                attributeName="transform"
+                                type="rotate"
+                                from={`0 0 0`}
+                                to={`${ctrAngle} 0 0`}
+                                dur={`${dur}s`}
+                                repeatCount="indefinite"
+                                begin={begin}
+                                additive="sum"
+                              />
+                              <rect x={-tw / 2} y={-10} width={tw} height={20} rx={6}
+                                fill={node.color + (isLoading ? "0D" : "1C")}
+                                stroke={node.color + (isLoading ? "38" : "66")}
+                                strokeWidth={0.7} />
+                              <text textAnchor="middle" dominantBaseline="middle"
+                                fill={node.color}
+                                opacity={isLoading ? 0.42 : 0.90}
+                                style={{ fontSize: 9.5, userSelect: "none", fontWeight: 500,
+                                  letterSpacing: "0.02em" }}>
+                                {item}
+                              </text>
+                            </g>
+                          </g>
+                        </g>
+                      );
+                    });
+                  });
+
+                  return out;
                 })()}
               </g>
             );
