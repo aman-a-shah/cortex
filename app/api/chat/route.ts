@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const { messages, threadId } = await req.json();
   const dept = session.department as Department;
   const crossDept = await getCrossDepContext(dept);
-  const stream = await chatWithContext(messages, dept, crossDept);
+  const { stream } = await chatWithContext(messages, dept, crossDept);
 
   const lastUserMessage = [...messages]
     .reverse()

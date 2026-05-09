@@ -16,6 +16,8 @@ export interface ContextEntry {
   source?: string;
   createdAt: string;
   tokenCount: number;
+  backboardSyncedAt?: string;
+  backboardSyncError?: string;
 }
 
 export interface ChatMessage {

@@ -1,9 +1,9 @@
-// Backboard.io integration — unified LLM router with persistent memory
-// Falls back to direct Anthropic API if BACKBOARD_API_KEY is not set
+// Backboard integration: one shared company context memory plus chat routing.
+// Falls back to direct Anthropic if Backboard is not configured or unavailable.
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { Department } from "@/types";
-import type { ContextEntry } from "@/types";
+import type { ContextEntry, Department } from "@/types";
+import { getSupabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -12,8 +12,29 @@ const anthropic = new Anthropic({
 const BACKBOARD_API_KEY = process.env.BACKBOARD_API_KEY;
 const BACKBOARD_BASE_URL = "https://app.backboard.io/api";
 
-// In-memory thread cache — one persistent thread per department per server lifetime
-const threadMap = new Map<Department, string>();
+export type BackboardStatus = "used" | "fallback" | "not_configured";
+
+export interface ChatStreamResult {
+  stream: ReadableStream<Uint8Array>;
+  backboardStatus: BackboardStatus;
+  backboardDetail: string;
+}
+
+interface BackboardAgentRow {
+  backboard_thread_id: string;
+}
+
+interface BackboardMessagePayload {
+  content: string;
+  stream?: boolean;
+  thread_id?: string;
+  memory?: "Auto" | "Readonly" | "off";
+  memory_response_citation?: boolean;
+}
+
+function isBackboardConfigured(): boolean {
+  return Boolean(BACKBOARD_API_KEY);
+}
 
 function buildSystemPrompt(
   department: Department,
@@ -21,7 +42,7 @@ function buildSystemPrompt(
 ): string {
   const contextBlock =
     crossDeptContext.length > 0
-      ? `\n\nGLOBAL COMPANY CONTEXT (from other departments):\n${crossDeptContext
+      ? `\n\nRECENT COMPANY CONTEXT SNAPSHOT:\n${crossDeptContext
           .map(
             (c) =>
               `[${c.department.toUpperCase()}] ${c.summary}\nFull: ${c.text}`
@@ -29,25 +50,202 @@ function buildSystemPrompt(
           .join("\n\n")}`
       : "";
 
-  return `You are Cortex, an AI assistant for the ${department} department. You have access to the global company context — insights from every department — to give you the full picture when answering.
+  return `You are Cortex, the AI agent for the ${department} department.
 
-When the user's question could benefit from cross-department context, proactively reference it and explain how it's relevant to their work. Always be concise and actionable.
+You are connected to a shared company memory. Use the latest cross-department context when it affects your answer. If design, finance, legal, marketing, product, management, or engineering has established a constraint, preference, decision, plan, budget, policy, or goal, follow it without requiring the user to restate it.
 
-If the user shares new information that seems important for other departments to know, acknowledge it and let them know it will be added to the global context.${contextBlock}`;
+Be concise and actionable. When useful, mention which department context influenced your answer.${contextBlock}`;
+}
+
+function contextSyncMessage(entry: ContextEntry): string {
+  return `New Cortex company context.
+
+Department: ${entry.department}
+Summary: ${entry.summary}
+Source: ${entry.source ?? "Cortex"}
+Created at: ${entry.createdAt}
+
+Full context:
+${entry.text}
+
+Use this in future answers whenever it is relevant.`;
+}
+
+async function createBackboardThread(system: string): Promise<string | null> {
+  if (!isBackboardConfigured()) return null;
+
+  try {
+    const res = await sendBackboardMessage(null, system, false, "Auto");
+    if (!res) return null;
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.id ?? data.thread_id ?? null;
+  } catch (error) {
+    console.error("[backboard] create thread failed", error);
+    return null;
+  }
+}
+
+async function sendBackboardMessage(
+  threadId: string | null,
+  content: string,
+  stream: boolean,
+  memory: "Auto" | "Readonly" | "off" = "off"
+): Promise<Response | null> {
+  if (!isBackboardConfigured()) return null;
+
+  const payload: BackboardMessagePayload = {
+    content,
+    stream,
+    memory,
+    memory_response_citation: true,
+  };
+  if (threadId) payload.thread_id = threadId;
+
+  return fetch(`${BACKBOARD_BASE_URL}/threads/messages`, {
+    method: "POST",
+    headers: {
+      "X-API-Key": BACKBOARD_API_KEY!,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+async function getBackboardAgent(): Promise<string | null> {
+  if (!isBackboardConfigured() || !isSupabaseConfigured()) return null;
+
+  const { data, error } = await getSupabaseAdmin()
+    .from("backboard_agents")
+    .select("backboard_thread_id")
+    .eq("scope", "company")
+    .is("department_id", null)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[supabase] backboard agent read failed", error);
+    return null;
+  }
+
+  return (data as BackboardAgentRow | null)?.backboard_thread_id ?? null;
+}
+
+async function saveBackboardAgent(
+  backboardThreadId: string
+): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+
+  const { error } = await getSupabaseAdmin().from("backboard_agents").upsert(
+    {
+      scope: "company",
+      department_id: null,
+      backboard_thread_id: backboardThreadId,
+    },
+    { onConflict: "scope,department_key" }
+  );
+
+  if (error) console.error("[supabase] backboard agent save failed", error);
+}
+
+async function getOrCreateBackboardAgent(): Promise<string | null> {
+  const existing = await getBackboardAgent();
+  if (existing) return existing;
+
+  const label = "Cortex global company context memory";
+  const system =
+    "You are Cortex's global company memory. Store durable cross-department context updates. Future department agents will ask you questions and expect you to apply the latest company constraints, decisions, preferences, policies, budgets, timelines, design standards, and product requirements.";
+
+  const threadId = await createBackboardThread(`${label}\n\n${system}`);
+  if (!threadId) return null;
+
+  await saveBackboardAgent(threadId);
+  return threadId;
+}
+
+
+async function markContextBackboardStatus(
+  entryId: string,
+  status: "synced" | "failed",
+  errorMessage?: string
+): Promise<void> {
+  if (!isSupabaseConfigured() || entryId.startsWith("ctx-")) return;
+
+  const update =
+    status === "synced"
+      ? {
+          backboard_synced_at: new Date().toISOString(),
+          backboard_sync_error: null,
+        }
+      : {
+          backboard_sync_error: errorMessage?.slice(0, 500) ?? "Sync failed",
+        };
+
+  const { error } = await getSupabaseAdmin()
+    .from("context_entries")
+    .update(update)
+    .eq("id", entryId);
+
+  if (error) console.error("[supabase] backboard status update failed", error);
+}
+
+export async function syncContextToBackboard(
+  entry: ContextEntry
+): Promise<void> {
+  if (!isBackboardConfigured()) return;
+
+  const message = contextSyncMessage(entry);
+  const threadId = await getOrCreateBackboardAgent();
+
+  if (!threadId) {
+    await markContextBackboardStatus(entry.id, "failed", "No Backboard thread");
+    return;
+  }
+
+  const response = await sendBackboardMessage(threadId, message, false, "Auto");
+
+  await markContextBackboardStatus(
+    entry.id,
+    response?.ok ? "synced" : "failed",
+    response?.ok
+      ? undefined
+      : `Backboard context sync failed${response ? `: ${response.status}` : ""}`
+  );
 }
 
 export async function chatWithContext(
   messages: { role: "user" | "assistant"; content: string }[],
   department: Department,
   crossDeptContext: ContextEntry[]
-): Promise<ReadableStream<Uint8Array>> {
+): Promise<ChatStreamResult> {
   const systemPrompt = buildSystemPrompt(department, crossDeptContext);
 
-  // Use Backboard if configured, else direct Anthropic
-  if (BACKBOARD_API_KEY) {
-    return backboardChat(messages, systemPrompt, department);
+  if (isBackboardConfigured()) {
+    const stream = await backboardGlobalChat(
+      messages,
+      systemPrompt,
+      department
+    );
+    if (stream) {
+      return {
+        stream,
+        backboardStatus: "used",
+        backboardDetail: "Using global Backboard memory",
+      };
+    }
+
+    return {
+      stream: await anthropicStream(messages, systemPrompt),
+      backboardStatus: "fallback",
+      backboardDetail: "Backboard unavailable; used Anthropic fallback",
+    };
   }
-  return anthropicStream(messages, systemPrompt);
+
+  return {
+    stream: await anthropicStream(messages, systemPrompt),
+    backboardStatus: "not_configured",
+    backboardDetail: "Backboard key not configured; used Anthropic",
+  };
 }
 
 async function anthropicStream(
@@ -77,60 +275,78 @@ async function anthropicStream(
   });
 }
 
-async function getOrCreateThread(dept: Department, system: string): Promise<string | null> {
-  if (threadMap.has(dept)) return threadMap.get(dept)!;
-
-  try {
-    const res = await fetch(`${BACKBOARD_BASE_URL}/threads`, {
-      method: "POST",
-      headers: {
-        "X-API-Key": BACKBOARD_API_KEY!,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ system }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const id = data.id ?? data.thread_id;
-    if (!id) return null;
-    threadMap.set(dept, id);
-    console.log(`[backboard] created thread for ${dept}:`, id);
-    return id;
-  } catch {
-    return null;
-  }
-}
-
-async function backboardChat(
+async function backboardGlobalChat(
   messages: { role: "user" | "assistant"; content: string }[],
   system: string,
-  dept: Department
-): Promise<ReadableStream<Uint8Array>> {
-  try {
-    const threadId = await getOrCreateThread(dept, system);
-    if (!threadId) return anthropicStream(messages, system);
+  department: Department
+): Promise<ReadableStream<Uint8Array> | null> {
+  const threadId = await getOrCreateBackboardAgent();
+  if (!threadId) return null;
 
-    const lastUser = [...messages].reverse().find((m) => m.role === "user");
-    if (!lastUser) return anthropicStream(messages, system);
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
+  if (!lastUser) return null;
 
-    const response = await fetch(`${BACKBOARD_BASE_URL}/threads/messages`, {
-      method: "POST",
-      headers: {
-        "X-API-Key": BACKBOARD_API_KEY!,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        thread_id: threadId,
-        content: lastUser.content,
-        stream: true,
-      }),
-    });
+  const response = await sendBackboardMessage(
+    threadId,
+    `${system}\n\nCurrent user department: ${department}\n\nUser message:\n${lastUser.content}`,
+    true,
+    "Readonly"
+  );
 
-    if (!response.ok || !response.body) return anthropicStream(messages, system);
-    return response.body;
-  } catch {
-    return anthropicStream(messages, system);
+  if (!response || !response.ok || !response.body) {
+    console.error(
+      "[backboard] chat failed",
+      response?.status,
+      response ? await response.text() : "no response"
+    );
+    return null;
   }
+
+  return backboardSseToTextStream(response.body);
+}
+
+function backboardSseToTextStream(
+  body: ReadableStream<Uint8Array>
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  return new ReadableStream({
+    async start(controller) {
+      const reader = body.getReader();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+
+        for (const event of events) {
+          const dataLine = event
+            .split("\n")
+            .find((line) => line.startsWith("data: "));
+          if (!dataLine) continue;
+
+          try {
+            const payload = JSON.parse(dataLine.slice(6));
+            if (
+              payload.type === "content_streaming" &&
+              typeof payload.content === "string"
+            ) {
+              controller.enqueue(encoder.encode(payload.content));
+            }
+          } catch {
+            continue;
+          }
+        }
+      }
+
+      controller.close();
+    },
+  });
 }
 
 export async function extractContextFromMessage(
@@ -143,7 +359,7 @@ export async function extractContextFromMessage(
     messages: [
       {
         role: "user",
-        content: `Analyze this message from the ${department} department. If it contains substantial company-relevant information (decisions, plans, budgets, strategies, policies, goals), extract it.
+        content: `Analyze this message from the ${department} department. If it contains substantial company-relevant information (decisions, plans, budgets, strategies, policies, goals, design standards, product requirements, technical constraints, budgets, deadlines, policies), extract it.
 
 Message: "${message}"
 

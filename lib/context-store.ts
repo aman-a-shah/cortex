@@ -1,5 +1,6 @@
 import type { ContextEntry, Department } from "@/types";
 import { getSupabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
+import { syncContextToBackboard } from "@/lib/backboard";
 
 const store: ContextEntry[] = [];
 
@@ -13,6 +14,8 @@ interface ContextRow {
   source: string | null;
   created_at: string;
   token_count: number | null;
+  backboard_synced_at: string | null;
+  backboard_sync_error: string | null;
 }
 
 function mapContextRow(row: ContextRow): ContextEntry {
@@ -26,6 +29,8 @@ function mapContextRow(row: ContextRow): ContextEntry {
     source: row.source ?? undefined,
     createdAt: row.created_at,
     tokenCount: row.token_count ?? Math.ceil(row.text.length / 4),
+    backboardSyncedAt: row.backboard_synced_at ?? undefined,
+    backboardSyncError: row.backboard_sync_error ?? undefined,
   };
 }
 
@@ -35,7 +40,7 @@ export async function getContextEntries(): Promise<ContextEntry[]> {
       const { data, error } = await getSupabaseAdmin()
         .from("context_entries")
         .select(
-          "id,department_id,text,summary,media_url,media_public_id,source,created_at,token_count"
+          "id,department_id,text,summary,media_url,media_public_id,source,created_at,token_count,backboard_synced_at,backboard_sync_error"
         )
         .order("created_at", { ascending: false });
 
@@ -90,12 +95,16 @@ export async function addContextEntry(
           token_count: entry.tokenCount,
         })
         .select(
-          "id,department_id,text,summary,media_url,media_public_id,source,created_at,token_count"
+          "id,department_id,text,summary,media_url,media_public_id,source,created_at,token_count,backboard_synced_at,backboard_sync_error"
         )
         .single();
 
       if (error) throw error;
-      return mapContextRow(data as ContextRow);
+      const created = mapContextRow(data as ContextRow);
+      syncContextToBackboard(created).catch((syncError) => {
+        console.error("[backboard] context sync failed", syncError);
+      });
+      return created;
     } catch (error) {
       console.error("[supabase] context write failed", error);
     }
