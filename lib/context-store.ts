@@ -76,6 +76,41 @@ export async function getCrossDepContext(
     .slice(0, 8);
 }
 
+export async function deleteContextEntries(ids: string[]): Promise<void> {
+  if (!isSupabaseConfigured() || ids.length === 0) {
+    // also delete from in-memory store
+    for (const id of ids) {
+      const idx = store.findIndex(e => e.id === id);
+      if (idx !== -1) store.splice(idx, 1);
+    }
+    return;
+  }
+  try {
+    await getSupabaseAdmin().from("context_entries").delete().in("id", ids);
+  } catch (error) {
+    console.error("[supabase] context delete failed", error);
+  }
+}
+
+export async function deleteUserDeptContext(userId: string, department: Department): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    // remove from in-memory store by dept
+    const before = store.length;
+    store.splice(0, store.length, ...store.filter(e => e.department !== department));
+    console.log(`[store] removed ${before - store.length} in-memory entries`);
+    return;
+  }
+  try {
+    await getSupabaseAdmin()
+      .from("context_entries")
+      .delete()
+      .eq("created_by", userId)
+      .eq("department_id", department);
+  } catch (error) {
+    console.error("[supabase] user dept context delete failed", error);
+  }
+}
+
 export async function addContextEntry(
   entry: Omit<ContextEntry, "id" | "createdAt">,
   createdBy?: string
