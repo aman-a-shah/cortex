@@ -63,7 +63,7 @@ export default function LoginScreen({ onLogin }: Props) {
       >
         {/* Header */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-          <svg width="30" height="30" viewBox="0 0 36 36" fill="none">
+          <svg width="40" height="40" viewBox="0 0 36 36" fill="none">
             <circle cx="18" cy="18" r="17" stroke="var(--text-primary)" strokeWidth="1.2" opacity="0.5" />
             <circle cx="18" cy="18" r="5" fill="var(--accent)" opacity="0.9" />
             <line x1="18" y1="1" x2="18" y2="11" stroke="var(--text-primary)" strokeWidth="1.2" opacity="0.4" />

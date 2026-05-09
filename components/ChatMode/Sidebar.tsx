@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { DEPT_CONFIG } from "@/lib/dept-config";
 import PolarityBadge from "@/components/PolarityBadge";
 import type { Department } from "@/types";
@@ -18,6 +19,7 @@ interface Props {
   onNewChat: () => void;
   onSelectConversation: (id: string) => void;
   onLogout?: () => void;
+  onDeleteConversation?: (id: string, withContext: boolean) => void;
 }
 
 export default function Sidebar({
@@ -28,10 +30,13 @@ export default function Sidebar({
   onNewChat,
   onSelectConversation,
   onLogout,
+  onDeleteConversation,
 }: Props) {
   const cfg = DEPT_CONFIG[department];
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
   return (
+    <>
     <aside
       style={{
         width: 240,
@@ -111,47 +116,95 @@ export default function Sidebar({
             {conversations.map((conv) => {
               const isActive = conv.id === activeConversationId;
               return (
-                <button
+                <div
                   key={conv.id}
-                  onClick={() => onSelectConversation(conv.id)}
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 2,
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    background: isActive ? "var(--surface-2)" : "transparent",
-                    border: "none",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    transition: "background 0.12s ease",
-                    marginBottom: 1,
-                  }}
+                  className="conv-row"
+                  style={{ position: "relative", marginBottom: 1 }}
                   onMouseEnter={(e) => {
-                    if (!isActive) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
+                    const trash = e.currentTarget.querySelector<HTMLElement>(".conv-trash");
+                    if (trash) trash.style.opacity = "1";
+                    const btn = e.currentTarget.querySelector<HTMLElement>(".conv-btn");
+                    if (btn && !isActive) btn.style.background = "rgba(255,255,255,0.04)";
                   }}
                   onMouseLeave={(e) => {
-                    if (!isActive) (e.currentTarget as HTMLElement).style.background = "transparent";
+                    const trash = e.currentTarget.querySelector<HTMLElement>(".conv-trash");
+                    if (trash) trash.style.opacity = "0";
+                    const btn = e.currentTarget.querySelector<HTMLElement>(".conv-btn");
+                    if (btn && !isActive) btn.style.background = "transparent";
                   }}
                 >
-                  <span
+                  <button
+                    className="conv-btn"
+                    onClick={() => onSelectConversation(conv.id)}
                     style={{
-                      fontSize: 13,
-                      color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
-                      fontWeight: isActive ? 500 : 400,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      display: "block",
+                      width: "100%",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                      padding: "8px 32px 8px 10px",
+                      borderRadius: 8,
+                      background: isActive ? "var(--surface-2)" : "transparent",
+                      border: "none",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      transition: "background 0.12s ease",
                     }}
                   >
-                    {conv.title}
-                  </span>
-                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                    {formatRelativeTime(conv.timestamp)}
-                  </span>
-                </button>
+                    <span
+                      style={{
+                        fontSize: 13,
+                        color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
+                        fontWeight: isActive ? 500 : 400,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        display: "block",
+                      }}
+                    >
+                      {conv.title}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      {formatRelativeTime(conv.timestamp)}
+                    </span>
+                  </button>
+                  {onDeleteConversation && (
+                    <button
+                      className="conv-trash"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTarget({ id: conv.id, title: conv.title });
+                      }}
+                      style={{
+                        position: "absolute",
+                        right: 6,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        opacity: 0,
+                        transition: "opacity 0.15s ease",
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: "4px",
+                        borderRadius: 4,
+                        color: "var(--text-muted)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.color = "var(--red, #f46a6a)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
+                      }}
+                      title="Delete conversation"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M1 3h10M4 3V2h4v1M2 3l.7 7.3A.7.7 0 003.4 11h5.2a.7.7 0 00.7-.7L10 3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                  )}
+                </div>
               );
             })}
           </>
@@ -224,6 +277,107 @@ export default function Sidebar({
         )}
       </div>
     </aside>
+
+    {/* Delete confirmation popup */}
+    {deleteTarget && onDeleteConversation && (
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 200,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(0,0,0,0.5)",
+        }}
+        onClick={() => setDeleteTarget(null)}
+      >
+        <div
+          style={{
+            width: 340,
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: 12,
+            padding: "20px",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
+              Delete conversation?
+            </p>
+            <p style={{
+              margin: "4px 0 0",
+              fontSize: 12,
+              color: "var(--text-muted)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}>
+              {deleteTarget.title.slice(0, 60)}
+            </p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <button
+              onClick={() => {
+                onDeleteConversation(deleteTarget.id, false);
+                setDeleteTarget(null);
+              }}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 7,
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
+                color: "var(--text-secondary)",
+                fontSize: 13,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              Delete conversation
+            </button>
+            <button
+              onClick={() => {
+                onDeleteConversation(deleteTarget.id, true);
+                setDeleteTarget(null);
+              }}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 7,
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
+                color: cfg.color,
+                fontSize: 13,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              Delete + {cfg.label} context
+            </button>
+            <button
+              onClick={() => setDeleteTarget(null)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 7,
+                background: "transparent",
+                border: "1px solid var(--border)",
+                color: "var(--text-muted)",
+                fontSize: 13,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

@@ -2,10 +2,10 @@
 
 :root {
   /* Background stack */
-  --bg: #111110;
-  --surface: #161614;
-  --surface-2: #1e1e1c;
-  --surface-3: #272724;
+  --bg: #242424;
+  --surface: #2d2d2d;
+  --surface-2: #353535;
+  --surface-3: #3d3d3d;
 
   /* Borders */
   --border: rgba(255, 255, 255, 0.07);
@@ -126,8 +126,9 @@ body {
 }
 
 @keyframes ring-pulse {
-  0% { transform: scale(1); opacity: 0.5; }
-  100% { transform: scale(2.2); opacity: 0; }
+  0%   { transform: scale(1);    opacity: 0.45; }
+  60%  { opacity: 0.15; }
+  100% { transform: scale(1.75); opacity: 0; }
 }
 
 @keyframes district-pulse {
@@ -159,6 +160,11 @@ body {
 @keyframes mode-fade-in {
   0% { opacity: 0; }
   100% { opacity: 1; }
+}
+
+@keyframes orbit-fade-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 /* ─── Utility classes ───────────────────────────────────── */

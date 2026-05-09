@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getContextEntries, addContextEntry } from "@/lib/context-store";
+import { getContextEntries, addContextEntry, deleteContextEntries, deleteUserDeptContext } from "@/lib/context-store";
 import { notifyDepartments } from "@/lib/pingram";
 import { verifyToken, TOKEN_COOKIE } from "@/lib/auth";
 import type { Department } from "@/types";
@@ -39,4 +39,20 @@ export async function POST(req: NextRequest) {
   await notifyDepartments({ sourceDept: department, summary });
 
   return NextResponse.json(entry, { status: 201 });
+}
+
+export async function DELETE(req: NextRequest) {
+  const token = req.cookies.get(TOKEN_COOKIE)?.value;
+  const session = token ? await verifyToken(token) : null;
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await req.json();
+
+  if (Array.isArray(body.ids) && body.ids.length > 0) {
+    await deleteContextEntries(body.ids);
+  } else if (body.department) {
+    await deleteUserDeptContext(session.userId, body.department as Department);
+  }
+
+  return NextResponse.json({ ok: true });
 }
