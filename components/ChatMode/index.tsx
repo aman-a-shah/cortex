@@ -1,40 +1,110 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Sidebar from "./Sidebar";
 import MessageList from "./MessageList";
 import InputBar from "./InputBar";
-import ContextAwarenessBar from "./ContextAwarenessBar";
 import { useContextStore } from "@/hooks/useContextStore";
 import type { ChatMessage, Department } from "@/types";
 import { DEPT_CONFIG } from "@/lib/dept-config";
 
+interface Conversation {
+  id: string;
+  title: string;
+  department: Department;
+  messages: ChatMessage[];
+  timestamp: string;
+}
+
 interface Props {
   initialDept?: Department;
+  userName?: string;
   onLogout?: () => void;
 }
 
-export default function ChatMode({ initialDept = "engineering", onLogout }: Props) {
-  const [activeDept, setActiveDept] = useState<Department>(initialDept);
+export default function ChatMode({
+  initialDept = "engineering",
+  userName = "",
+  onLogout,
+}: Props) {
+  const department = initialDept; // locked — no switching
+  const cfg = DEPT_CONFIG[department];
+  const { entries } = useContextStore();
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
-  const { entries } = useContextStore();
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  const convIdCounter = useRef(0);
 
-  const handleDeptChange = useCallback((dept: Department) => {
-    setActiveDept(dept);
+  // Conversations persisted to localStorage
+  const [conversations, setConversations] = useState<Conversation[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = localStorage.getItem(`cortex_convs_${initialDept}`);
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`cortex_convs_${initialDept}`, JSON.stringify(conversations.slice(0, 12)));
+    } catch { /* ignore */ }
+  }, [conversations, initialDept]);
+
+  // Save current conversation when messages change
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
+  function saveCurrentConversation(msgs: ChatMessage[]) {
+    if (msgs.length === 0 || !activeConvId) return;
+    const title = msgs.find((m) => m.role === "user")?.content.slice(0, 52) ?? "Conversation";
+    setConversations((prev) => {
+      const exists = prev.find((c) => c.id === activeConvId);
+      const updated: Conversation = {
+        id: activeConvId,
+        title,
+        department,
+        messages: msgs,
+        timestamp: new Date().toISOString(),
+      };
+      if (exists) return prev.map((c) => (c.id === activeConvId ? updated : c));
+      return [updated, ...prev];
+    });
+  }
+
+  function handleNewChat() {
+    saveCurrentConversation(messagesRef.current);
     setMessages([]);
-    setStreaming(false);
     setStreamContent("");
-  }, []);
+    setStreaming(false);
+    setActiveConvId(null);
+  }
+
+  function handleSelectConversation(id: string) {
+    saveCurrentConversation(messagesRef.current);
+    const conv = conversations.find((c) => c.id === id);
+    if (!conv) return;
+    setMessages(conv.messages);
+    setActiveConvId(id);
+    setStreamContent("");
+    setStreaming(false);
+  }
 
   const handleSend = useCallback(
     async (text: string) => {
+      // Start new conversation if needed
+      let convId = activeConvId;
+      if (!convId) {
+        convId = `conv-${Date.now()}-${++convIdCounter.current}`;
+        setActiveConvId(convId);
+      }
+
       const userMsg: ChatMessage = {
         id: `msg-${Date.now()}`,
         role: "user",
         content: text,
-        department: activeDept,
+        department,
         timestamp: new Date().toISOString(),
       };
       const nextMessages = [...messages, userMsg];
@@ -43,18 +113,14 @@ export default function ChatMode({ initialDept = "engineering", onLogout }: Prop
       setStreamContent("");
 
       try {
-        const apiMessages = nextMessages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        }));
-
+        const apiMessages = nextMessages.map((m) => ({ role: m.role, content: m.content }));
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: apiMessages, department: activeDept }),
+          body: JSON.stringify({ messages: apiMessages, department }),
         });
 
-        if (!res.body) throw new Error("No stream body");
+        if (!res.body) throw new Error("No stream");
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -67,12 +133,9 @@ export default function ChatMode({ initialDept = "engineering", onLogout }: Prop
           setStreamContent(accumulated);
         }
 
-        // Detect cross-dept context refs from the response
         const contextRefs = entries
-          .filter((e) => e.department !== activeDept)
-          .filter((e) =>
-            accumulated.toLowerCase().includes(e.department.toLowerCase())
-          )
+          .filter((e) => e.department !== department)
+          .filter((e) => accumulated.toLowerCase().includes(e.department.toLowerCase()))
           .slice(0, 3)
           .map((e) => e.department);
 
@@ -80,119 +143,104 @@ export default function ChatMode({ initialDept = "engineering", onLogout }: Prop
           id: `msg-${Date.now()}-ai`,
           role: "assistant",
           content: accumulated,
-          department: activeDept,
+          department,
           contextRefs: [...new Set(contextRefs)],
           timestamp: new Date().toISOString(),
         };
-        setMessages((prev) => [...prev, assistantMsg]);
-      } catch (err) {
-        console.error(err);
+        const finalMessages = [...nextMessages, assistantMsg];
+        setMessages(finalMessages);
+
+        // Persist conversation
+        const title = text.slice(0, 52);
+        setConversations((prev) => {
+          const exists = prev.find((c) => c.id === convId);
+          const updated: Conversation = { id: convId!, title, department, messages: finalMessages, timestamp: new Date().toISOString() };
+          if (exists) return prev.map((c) => (c.id === convId ? updated : c));
+          return [updated, ...prev];
+        });
+      } catch {
         setMessages((prev) => [
           ...prev,
-          {
-            id: `msg-${Date.now()}-err`,
-            role: "assistant",
-            content: "Sorry, something went wrong. Please try again.",
-            department: activeDept,
-            timestamp: new Date().toISOString(),
-          },
+          { id: `msg-${Date.now()}-err`, role: "assistant", content: "Something went wrong. Please try again.", department, timestamp: new Date().toISOString() },
         ]);
       } finally {
         setStreaming(false);
         setStreamContent("");
       }
     },
-    [activeDept, messages, entries]
+    [department, messages, entries, activeConvId]
   );
 
-  const cfg = DEPT_CONFIG[activeDept];
+  const crossDeptCount = entries.filter((e) => e.department !== department).length;
 
   return (
-    <div className="flex h-full">
-      <Sidebar activeDept={activeDept} onDeptChange={handleDeptChange} />
+    <div style={{ display: "flex", height: "100%", background: "var(--bg)" }}>
+      <Sidebar
+        department={department}
+        userName={userName || cfg.label}
+        conversations={conversations}
+        activeConversationId={activeConvId}
+        onNewChat={handleNewChat}
+        onSelectConversation={handleSelectConversation}
+        onLogout={onLogout}
+      />
 
-      <div className="flex flex-col flex-1 min-w-0">
+      {/* Main chat column */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
         {/* Header */}
         <div
-          className="flex items-center justify-between px-6 py-3 shrink-0"
-          style={{ borderBottom: "1px solid var(--border)" }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "13px 24px",
+            borderBottom: "1px solid var(--border)",
+            flexShrink: 0,
+          }}
         >
-          <div className="flex items-center gap-3">
-            <span style={{ color: cfg.color, fontSize: 20 }}>{cfg.emoji}</span>
-            <div>
-              <span
-                className="text-sm font-medium"
-                style={{ color: "var(--text-primary)" }}
-              >
-                {cfg.label}
-              </span>
-              <span
-                className="text-xs ml-2"
-                style={{ color: "var(--text-muted)" }}
-              >
-                · vibe coding session
-              </span>
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 16 }}>{cfg.emoji}</span>
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-primary)" }}>
+              {cfg.label}
+            </span>
+            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+              · {crossDeptCount} cross-dept context{crossDeptCount !== 1 ? "s" : ""} active
+            </span>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ background: "#22c55e", boxShadow: "0 0 6px #22c55e" }}
-              />
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                {entries.filter((e) => e.department !== activeDept).length} cross-dept contexts active
-              </span>
-            </div>
-            {onLogout && (
-              <button
-                onClick={onLogout}
-                className="text-xs px-2.5 py-1 rounded-lg transition-colors"
-                style={{
-                  background: "transparent",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = "#ef444444";
-                  (e.currentTarget as HTMLElement).style.color = "#ef4444";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
-                  (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
-                }}
-              >
-                Sign out
-              </button>
-            )}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div
+              className="live-dot"
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "var(--green)",
+              }}
+            />
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>live</span>
           </div>
         </div>
 
-        <ContextAwarenessBar entries={entries} activeDept={activeDept} />
-
+        {/* Messages */}
         <MessageList
           messages={messages}
           streaming={streaming}
           streamContent={streamContent}
+          department={department}
+          userName={userName || cfg.label}
         />
 
+        {/* Input */}
         <InputBar
           onSend={handleSend}
           onToolResult={(formatted) => {
             setMessages((prev) => [
               ...prev,
-              {
-                id: `msg-${Date.now()}-tool`,
-                role: "assistant",
-                content: formatted,
-                department: activeDept,
-                timestamp: new Date().toISOString(),
-              },
+              { id: `msg-${Date.now()}-tool`, role: "assistant", content: formatted, department, timestamp: new Date().toISOString() },
             ]);
           }}
           disabled={streaming}
-          activeDept={activeDept}
+          activeDept={department}
         />
       </div>
     </div>

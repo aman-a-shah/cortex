@@ -23,6 +23,7 @@ export function useContextStore(pollIntervalMs = 3000) {
       });
     } catch {
       // silently fail — demo is resilient
+      console.error("Failed to fetch context entries");
     } finally {
       setLoading(false);
     }

@@ -7,64 +7,68 @@ interface Props {
 }
 
 export default function LoadingScreen({ onComplete }: Props) {
-  const [phase, setPhase] = useState(0);
+  const [phase, setPhase] = useState<0 | 1 | 2>(0);
 
   useEffect(() => {
-    // Sequence:
-    // Phase 0: Render hidden
-    // Phase 1: Blur and scale in (starts immediately)
-    // Phase 2: Fade out overlay
-    const t1 = setTimeout(() => setPhase(1), 50);
-    const t2 = setTimeout(() => setPhase(2), 2400);
-    const t3 = setTimeout(() => onComplete(), 3200);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-    };
+    const t1 = setTimeout(() => setPhase(1), 80);
+    const t2 = setTimeout(() => setPhase(2), 1800);
+    const t3 = setTimeout(onComplete, 2400);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, [onComplete]);
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black transition-opacity duration-700 ease-in-out"
-      style={{ opacity: phase === 2 ? 0 : 1 }}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center"
+      style={{
+        background: "var(--bg)",
+        opacity: phase === 2 ? 0 : 1,
+        transition: phase === 2 ? "opacity 0.6s ease" : "none",
+        pointerEvents: "none",
+      }}
     >
       <div
-        className="flex flex-col items-center justify-center transition-all duration-[2000ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
         style={{
-          opacity: phase === 0 ? 0 : 1,
-          transform: phase === 0 ? "scale(0.92)" : "scale(1)",
-          filter: phase === 0 ? "blur(12px)" : "blur(0px)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 20,
+          opacity: phase >= 1 ? 1 : 0,
+          animation: phase === 1 ? "logo-reveal 1.1s cubic-bezier(0.16,1,0.3,1) forwards" : "none",
         }}
       >
-        <svg
-          width="48"
-          height="48"
-          viewBox="0 0 22 22"
-          fill="none"
-          className="mb-6 opacity-90"
-        >
-          <circle cx="11" cy="11" r="10" stroke="#f5f5f7" strokeWidth="1.5" />
-          <circle cx="11" cy="11" r="4" fill="#f5f5f7" opacity="0.8" />
-          <line x1="11" y1="1" x2="11" y2="7" stroke="#f5f5f7" strokeWidth="1.5" />
-          <line x1="11" y1="15" x2="11" y2="21" stroke="#f5f5f7" strokeWidth="1.5" />
-          <line x1="1" y1="11" x2="7" y2="11" stroke="#f5f5f7" strokeWidth="1.5" />
-          <line x1="15" y1="11" x2="21" y2="11" stroke="#f5f5f7" strokeWidth="1.5" />
+        {/* Cortex mark */}
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+          <circle cx="18" cy="18" r="17" stroke="var(--text-primary)" strokeWidth="1.2" opacity="0.6" />
+          <circle cx="18" cy="18" r="5" fill="var(--accent)" opacity="0.9" />
+          <line x1="18" y1="1" x2="18" y2="11" stroke="var(--text-primary)" strokeWidth="1.2" opacity="0.5" />
+          <line x1="18" y1="25" x2="18" y2="35" stroke="var(--text-primary)" strokeWidth="1.2" opacity="0.5" />
+          <line x1="1" y1="18" x2="11" y2="18" stroke="var(--text-primary)" strokeWidth="1.2" opacity="0.5" />
+          <line x1="25" y1="18" x2="35" y2="18" stroke="var(--text-primary)" strokeWidth="1.2" opacity="0.5" />
         </svg>
 
-        <h1
-          className="text-4xl font-semibold tracking-widest text-[#f5f5f7]"
-          style={{ letterSpacing: "0.15em" }}
-        >
-          CORTEX
-        </h1>
-        <p
-          className="mt-3 text-sm text-[#86868b] tracking-widest"
-          style={{ letterSpacing: "0.1em" }}
-        >
-          GLOBAL CONTEXT
-        </p>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 500,
+              letterSpacing: "0.22em",
+              color: "var(--text-primary)",
+              opacity: 0.9,
+            }}
+          >
+            CORTEX
+          </span>
+          <span
+            style={{
+              fontSize: 11,
+              letterSpacing: "0.12em",
+              color: "var(--text-muted)",
+              animation: phase === 1 ? "tagline-reveal 0.8s ease 0.5s both" : "none",
+            }}
+          >
+            GLOBAL CONTEXT
+          </span>
+        </div>
       </div>
     </div>
   );

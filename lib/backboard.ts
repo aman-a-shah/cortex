@@ -10,7 +10,10 @@ const anthropic = new Anthropic({
 });
 
 const BACKBOARD_API_KEY = process.env.BACKBOARD_API_KEY;
-const BACKBOARD_BASE_URL = "https://api.backboard.io/v1";
+const BACKBOARD_BASE_URL = "https://app.backboard.io/api";
+
+// In-memory thread cache — one persistent thread per department per server lifetime
+const threadMap = new Map<Department, string>();
 
 function buildSystemPrompt(
   department: Department,
@@ -42,7 +45,7 @@ export async function chatWithContext(
 
   // Use Backboard if configured, else direct Anthropic
   if (BACKBOARD_API_KEY) {
-    return backboardChat(messages, systemPrompt);
+    return backboardChat(messages, systemPrompt, department);
   }
   return anthropicStream(messages, systemPrompt);
 }
@@ -74,29 +77,60 @@ async function anthropicStream(
   });
 }
 
+async function getOrCreateThread(dept: Department, system: string): Promise<string | null> {
+  if (threadMap.has(dept)) return threadMap.get(dept)!;
+
+  try {
+    const res = await fetch(`${BACKBOARD_BASE_URL}/threads`, {
+      method: "POST",
+      headers: {
+        "X-API-Key": BACKBOARD_API_KEY!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ system }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const id = data.id ?? data.thread_id;
+    if (!id) return null;
+    threadMap.set(dept, id);
+    console.log(`[backboard] created thread for ${dept}:`, id);
+    return id;
+  } catch {
+    return null;
+  }
+}
+
 async function backboardChat(
   messages: { role: "user" | "assistant"; content: string }[],
-  system: string
+  system: string,
+  dept: Department
 ): Promise<ReadableStream<Uint8Array>> {
-  const response = await fetch(`${BACKBOARD_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${BACKBOARD_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      stream: true,
-      messages: [{ role: "system", content: system }, ...messages],
-    }),
-  });
+  try {
+    const threadId = await getOrCreateThread(dept, system);
+    if (!threadId) return anthropicStream(messages, system);
 
-  if (!response.ok || !response.body) {
-    // Fallback to direct Anthropic
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    if (!lastUser) return anthropicStream(messages, system);
+
+    const response = await fetch(`${BACKBOARD_BASE_URL}/threads/messages`, {
+      method: "POST",
+      headers: {
+        "X-API-Key": BACKBOARD_API_KEY!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        thread_id: threadId,
+        content: lastUser.content,
+        stream: true,
+      }),
+    });
+
+    if (!response.ok || !response.body) return anthropicStream(messages, system);
+    return response.body;
+  } catch {
     return anthropicStream(messages, system);
   }
-
-  return response.body;
 }
 
 export async function extractContextFromMessage(

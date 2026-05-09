@@ -1,16 +1,31 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #000000;
-  --surface: #111111;
-  --surface-2: #1c1c1e;
-  --border: rgba(255, 255, 255, 0.15);
-  --border-hover: rgba(255, 255, 255, 0.3);
-  --accent: #0071e3;
-  --accent-dim: rgba(0, 113, 227, 0.15);
-  --text-primary: #f5f5f7;
-  --text-muted: #86868b;
-  --text-secondary: #a1a1a6;
+  /* Background stack */
+  --bg: #111110;
+  --surface: #161614;
+  --surface-2: #1e1e1c;
+  --surface-3: #272724;
+
+  /* Borders */
+  --border: rgba(255, 255, 255, 0.07);
+  --border-hover: rgba(255, 255, 255, 0.13);
+  --border-strong: rgba(255, 255, 255, 0.22);
+
+  /* Text */
+  --text-primary: #eceae4;
+  --text-secondary: #9b9891;
+  --text-muted: #5c5a54;
+
+  /* Accent — Cortex warm coral */
+  --accent: #c87d56;
+  --accent-dim: rgba(200, 125, 86, 0.14);
+  --accent-bright: #e09070;
+
+  /* Semantic */
+  --green: #3ecf8e;
+  --green-dim: rgba(62, 207, 142, 0.15);
+  --red: #f46a6a;
 }
 
 @theme inline {
@@ -33,12 +48,15 @@ body {
 body {
   background: var(--bg);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-size: 15px;
+  line-height: 1.6;
 }
 
-/* Scrollbar */
+/* ─── Scrollbar ─────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -47,87 +65,125 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.15);
 }
 
-/* Selection */
+/* ─── Selection ─────────────────────────────────────────── */
 ::selection {
   background: var(--accent-dim);
   color: var(--text-primary);
 }
 
-/* Bubble glow effect utility */
-.bubble-glow {
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
+/* ─── Loading Screen ────────────────────────────────────── */
+@keyframes logo-reveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.94) translateY(6px);
+    filter: blur(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
 }
 
-/* Cortex logo pulse */
-@keyframes cortex-pulse {
-  0%, 100% { opacity: 0.8; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.04); }
+@keyframes tagline-reveal {
+  0% { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
-/* Loading particle animation */
-@keyframes particle-drift {
-  0% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0); }
-  20% { opacity: 1; }
-  80% { opacity: 1; }
-  100% { opacity: 0; transform: translate(0, 0) scale(1.5); }
+@keyframes screen-fade-out {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
-/* Mode transition */
-@keyframes curtain-open {
-  0% { clip-path: inset(0 50% 0 50%); }
-  100% { clip-path: inset(0 0% 0 0%); }
+/* ─── Chat Animations ───────────────────────────────────── */
+@keyframes msg-in {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes curtain-close {
-  0% { clip-path: inset(0 0% 0 0%); }
-  100% { clip-path: inset(0 50% 0 50%); }
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
-/* New bubble ring pulse */
+@keyframes typing-dots {
+  0%, 100% { opacity: 0.3; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-2px); }
+}
+
+/* ─── Context Mode / Bubble ─────────────────────────────── */
 @keyframes bubble-arrive {
-  0% { transform: scale(0.3); opacity: 0; }
-  60% { transform: scale(1.1); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  0% { opacity: 0; transform: scale(0.6); }
+  70% { opacity: 1; transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
 @keyframes ring-pulse {
-  0% { transform: scale(1); opacity: 0.6; }
-  100% { transform: scale(2.5); opacity: 0; }
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(2.2); opacity: 0; }
 }
 
-/* Live feed slide in */
-@keyframes feed-slide {
-  0% { transform: translateX(100%); opacity: 0; }
-  100% { transform: translateX(0); opacity: 1; }
+@keyframes district-pulse {
+  0%, 100% { opacity: 0.06; transform: scale(1); }
+  50% { opacity: 0.1; transform: scale(1.02); }
 }
 
-/* Message fade in */
-@keyframes msg-in {
-  0% { transform: translateY(8px); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
+@keyframes feed-item-in {
+  0% { opacity: 0; transform: translateX(12px); }
+  100% { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes detail-rise {
+  0% { opacity: 0; transform: translateY(16px) scale(0.97); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes accent-pulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+@keyframes live-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(62, 207, 142, 0.5); }
+  50% { box-shadow: 0 0 0 4px rgba(62, 207, 142, 0); }
+}
+
+/* ─── Mode transition ───────────────────────────────────── */
+@keyframes mode-fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* ─── Utility classes ───────────────────────────────────── */
 .animate-msg-in {
-  animation: msg-in 0.25s ease forwards;
-}
-
-.animate-feed-slide {
-  animation: feed-slide 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: msg-in 0.22s ease forwards;
 }
 
 .animate-bubble-arrive {
   animation: bubble-arrive 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-@keyframes bubble-wobble {
-  0% { transform: scale(0.96, 1.02) rotate(0deg); }
-  50% { transform: scale(1.03, 0.97) rotate(180deg); }
-  100% { transform: scale(0.96, 1.02) rotate(360deg); }
+.animate-feed-item-in {
+  animation: feed-item-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-detail-rise {
+  animation: detail-rise 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.live-dot {
+  animation: live-dot 2s ease-in-out infinite;
+}
+
+/* ─── Input focus ring ──────────────────────────────────── */
+.input-ring:focus-within {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.04);
 }

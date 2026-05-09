@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DEPT_CONFIG } from "@/lib/dept-config";
 import type { ContextEntry } from "@/types";
 
@@ -12,110 +12,173 @@ interface Props {
 
 export default function LiveFeed({ entries, latest, onEntryClick }: Props) {
   const latestIdRef = useRef<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     latestIdRef.current = latest?.id ?? null;
   }, [latest]);
 
   return (
-    <div
-      className="flex flex-col h-full overflow-hidden"
+    <aside
       style={{
-        width: 280,
-        borderLeft: "1px solid var(--border)",
+        width: collapsed ? 48 : 260,
+        flexShrink: 0,
+        height: "100%",
         background: "var(--surface)",
+        borderRight: "1px solid var(--border)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        transition: "width 0.25s cubic-bezier(0.22,1,0.36,1)",
+        zIndex: 10,
       }}
     >
+      {/* Header */}
       <div
-        className="px-4 py-3 shrink-0"
-        style={{ borderBottom: "1px solid var(--border)" }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: collapsed ? "14px 14px" : "14px 16px",
+          borderBottom: "1px solid var(--border)",
+          flexShrink: 0,
+          cursor: "pointer",
+          minHeight: 48,
+        }}
+        onClick={() => setCollapsed((v) => !v)}
       >
-        <div className="flex items-center gap-2">
-          <div
-            className="w-1.5 h-1.5 rounded-full"
-            style={{ background: "#22c55e", boxShadow: "0 0 6px #22c55e" }}
-          />
-          <span
-            className="text-xs font-medium"
-            style={{ color: "var(--text-muted)", letterSpacing: "0.08em" }}
-          >
-            LIVE CONTEXT FEED
-          </span>
-        </div>
+        <div
+          className="live-dot"
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: "var(--green)",
+            flexShrink: 0,
+          }}
+        />
+        {!collapsed && (
+          <>
+            <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.08em", color: "var(--text-muted)", flex: 1 }}>
+              CONTEXT FEED
+            </span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
+              <path d="M3 7.5L6 4.5L9 7.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+          </>
+        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto py-2">
-        {entries.slice(0, 20).map((entry, i) => {
-          const cfg = DEPT_CONFIG[entry.department];
-          const isNew = i === 0 && entry.id === latestIdRef.current;
-          return (
-            <button
-              key={entry.id}
-              className={`w-full text-left px-4 py-3 flex flex-col gap-1 transition-colors ${isNew ? "animate-feed-slide" : ""}`}
-              style={{
-                borderBottom: "1px solid var(--border)",
-                background: "transparent",
-                cursor: "pointer",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background =
-                  "rgba(255,255,255,0.03)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.background =
-                  "transparent";
-              }}
-              onClick={() => onEntryClick(entry)}
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className="text-xs px-1.5 py-0.5 rounded"
+      {/* Entry list */}
+      {!collapsed && (
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {entries.length === 0 ? (
+            <div style={{ padding: "24px 12px", textAlign: "center" }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>
+                Context entries will appear here
+              </p>
+            </div>
+          ) : (
+            entries.slice(0, 30).map((entry, i) => {
+              const cfg = DEPT_CONFIG[entry.department];
+              const isNew = i === 0 && entry.id === latestIdRef.current;
+              return (
+                <button
+                  key={entry.id}
+                  onClick={() => onEntryClick(entry)}
+                  className={isNew ? "animate-feed-item-in" : ""}
                   style={{
-                    background: cfg.color + "22",
-                    color: cfg.color,
-                    fontWeight: 500,
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "10px 14px",
+                    border: "none",
+                    borderBottom: "1px solid var(--border)",
+                    background: "transparent",
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 5,
+                    transition: "background 0.12s ease",
                   }}
+                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.03)")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                 >
-                  {cfg.emoji} {cfg.label}
-                </span>
-                {isNew && (
-                  <span
-                    className="text-xs px-1.5 py-0.5 rounded-full"
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        padding: "2px 6px",
+                        borderRadius: 6,
+                        background: cfg.color + "1a",
+                        color: cfg.color,
+                        fontWeight: 500,
+                      }}
+                    >
+                      {cfg.emoji} {cfg.label}
+                    </span>
+                    {isNew && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          padding: "1px 5px",
+                          borderRadius: 8,
+                          background: "var(--green-dim)",
+                          color: "var(--green)",
+                          fontWeight: 500,
+                        }}
+                      >
+                        NEW
+                      </span>
+                    )}
+                    <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: "auto" }}>
+                      {formatAgo(entry.createdAt)}
+                    </span>
+                  </div>
+                  <p
                     style={{
-                      background: "rgba(34,197,94,0.15)",
-                      color: "#22c55e",
+                      fontSize: 12,
+                      color: "var(--text-secondary)",
+                      margin: 0,
+                      lineHeight: 1.5,
+                      overflow: "hidden",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
                     }}
                   >
-                    NEW
-                  </span>
-                )}
-                <span
-                  className="text-xs ml-auto"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  {formatTimeAgo(entry.createdAt)}
-                </span>
-              </div>
-              <p
-                className="text-xs leading-relaxed"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                {entry.summary}
-              </p>
-            </button>
-          );
-        })}
-      </div>
-    </div>
+                    {entry.summary}
+                  </p>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* Footer stats */}
+      {!collapsed && (
+        <div
+          style={{
+            padding: "10px 14px",
+            borderTop: "1px solid var(--border)",
+            flexShrink: 0,
+          }}
+        >
+          <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
+            {entries.length} entries · {new Set(entries.map((e) => e.department)).size} depts
+          </p>
+        </div>
+      )}
+    </aside>
   );
 }
 
-function formatTimeAgo(iso: string): string {
+function formatAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
 }

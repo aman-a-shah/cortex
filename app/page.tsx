@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import LoadingScreen from "@/components/LoadingScreen";
 import LoginScreen from "@/components/LoginScreen";
 import ModeToggle from "@/components/ModeToggle";
-import PolarityBadge from "@/components/PolarityBadge";
 import type { Department } from "@/types";
 
 const ChatMode = dynamic(() => import("@/components/ChatMode"), { ssr: false });
@@ -68,50 +67,22 @@ export default function Home() {
     setAppState("transitioning");
   }, [mode, appState]);
 
-  // Crack transition effect
+  // Fade transition
   useEffect(() => {
     if (appState !== "transitioning" || pendingMode === null) return;
-
     const topLayer = chatRef.current;
     if (!topLayer) return;
 
-    const polyClosed = "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, 50% 0%, 48% 20%, 52% 40%, 49% 60%, 51% 80%, 50% 100%, 50% 100%, 51% 80%, 49% 60%, 52% 40%, 48% 20%, 50% 0%)";
-    const polyOpen = "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, -10% 0%, -12% 20%, -8% 40%, -11% 60%, -9% 80%, -10% 100%, 110% 100%, 111% 80%, 109% 60%, 112% 40%, 108% 20%, 110% 0%)";
-
-    topLayer.style.transition = "none";
-
-    if (pendingMode === "context") {
-      // Opening
-      topLayer.style.clipPath = polyClosed;
-      topLayer.style.opacity = "1";
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          topLayer.style.transition = "clip-path 0.7s cubic-bezier(0.8, 0, 0.2, 1), opacity 0.5s ease 0.2s";
-          topLayer.style.clipPath = polyOpen;
-          topLayer.style.opacity = "0";
-        });
-      });
-    } else {
-      // Closing
-      topLayer.style.clipPath = polyOpen;
-      topLayer.style.opacity = "0";
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          topLayer.style.transition = "clip-path 0.7s cubic-bezier(0.8, 0, 0.2, 1), opacity 0.3s ease";
-          topLayer.style.clipPath = polyClosed;
-          topLayer.style.opacity = "1";
-        });
-      });
-    }
+    topLayer.style.transition = "opacity 0.32s ease";
+    topLayer.style.opacity = pendingMode === "context" ? "0" : "1";
 
     const timer = setTimeout(() => {
       setMode(pendingMode);
       setPendingMode(null);
       setAppState("ready");
       topLayer.style.transition = "none";
-      topLayer.style.clipPath = "none";
       topLayer.style.opacity = pendingMode === "chat" ? "1" : "0";
-    }, 750);
+    }, 360);
 
     return () => clearTimeout(timer);
   }, [appState, pendingMode]);
@@ -151,7 +122,7 @@ export default function Home() {
               pointerEvents: mode === "chat" && appState !== "transitioning" ? "auto" : "none",
             }}
           >
-            <ChatMode initialDept={session.department} onLogout={handleLogout} />
+            <ChatMode initialDept={session.department} userName={session.name} onLogout={handleLogout} />
           </div>
         </>
       )}
@@ -161,8 +132,6 @@ export default function Home() {
         <ModeToggle mode={mode} onToggle={handleToggle} />
       )}
 
-      {/* Polarity code quality badge */}
-      {appState !== "loading" && <PolarityBadge />}
     </div>
   );
 }

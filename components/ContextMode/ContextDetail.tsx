@@ -13,86 +13,158 @@ export default function ContextDetail({ entry, onClose }: Props) {
   const cfg = DEPT_CONFIG[entry.department];
 
   useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [onClose]);
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-end justify-center pb-8"
-      style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
       onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 40,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,0,0,0.55)",
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
+        padding: 24,
+      }}
     >
       <div
-        className="w-full max-w-xl rounded-2xl p-6 mx-4"
-        style={{
-          background: "var(--surface)",
-          border: `1px solid ${cfg.color}33`,
-          boxShadow: `0 0 40px ${cfg.color}22`,
-          animation: "bubble-arrive 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards",
-        }}
         onClick={(e) => e.stopPropagation()}
+        className="animate-detail-rise"
+        style={{
+          width: "100%",
+          maxWidth: 520,
+          background: "var(--surface)",
+          border: `1px solid ${cfg.color}28`,
+          borderRadius: 18,
+          padding: "24px",
+          boxShadow: `0 0 60px ${cfg.color}18, 0 24px 60px rgba(0,0,0,0.6)`,
+        }}
       >
-        <div className="flex items-center gap-3 mb-4">
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
           <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-sm"
-            style={{ background: cfg.color + "22", border: `1px solid ${cfg.color}44` }}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              background: cfg.color + "1a",
+              border: `1px solid ${cfg.color}38`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 17,
+              flexShrink: 0,
+            }}
           >
             {cfg.emoji}
           </div>
-          <div>
-            <div className="text-sm font-medium" style={{ color: cfg.color }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: cfg.color }}>
               {cfg.label}
             </div>
-            <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
               {new Date(entry.createdAt).toLocaleString()}
               {entry.source ? ` · ${entry.source}` : ""}
             </div>
           </div>
           <button
-            className="ml-auto text-sm"
-            style={{ color: "var(--text-muted)", cursor: "pointer" }}
             onClick={onClose}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              background: "transparent",
+              border: "1px solid var(--border)",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 14,
+              transition: "all 0.12s ease",
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = "var(--border-hover)";
+              (e.currentTarget as HTMLElement).style.color = "var(--text-primary)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
+              (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
+            }}
           >
             ✕
           </button>
         </div>
 
-        <p
-          className="text-xs mb-3 font-semibold"
-          style={{ color: "var(--text-primary)" }}
+        {/* Summary */}
+        <div
+          style={{
+            padding: "10px 14px",
+            borderRadius: 10,
+            background: cfg.color + "10",
+            borderLeft: `2px solid ${cfg.color}`,
+            marginBottom: 14,
+          }}
         >
-          {entry.summary}
-        </p>
+          <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", margin: 0, lineHeight: 1.5 }}>
+            {entry.summary}
+          </p>
+        </div>
 
-        <p
-          className="text-sm leading-relaxed"
-          style={{ color: "var(--text-secondary)" }}
-        >
+        {/* Full text */}
+        <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 16px", lineHeight: 1.7, maxHeight: 200, overflowY: "auto" }}>
           {entry.text}
         </p>
 
+        {/* Media */}
         {entry.mediaUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={entry.mediaUrl}
             alt="Context media"
-            className="mt-4 rounded-lg w-full object-cover"
-            style={{ maxHeight: 200, border: "1px solid var(--border)" }}
+            style={{
+              width: "100%",
+              borderRadius: 10,
+              objectFit: "cover",
+              maxHeight: 180,
+              border: "1px solid var(--border)",
+              marginBottom: 14,
+            }}
           />
         )}
 
-        <div className="flex items-center gap-2 mt-4">
+        {/* Footer */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span
-            className="text-xs px-2 py-0.5 rounded-full"
             style={{
+              fontSize: 11,
+              padding: "3px 10px",
+              borderRadius: 20,
               background: "rgba(255,255,255,0.05)",
               color: "var(--text-muted)",
             }}
           >
-            ~{entry.tokenCount} tokens
+            {entry.tokenCount} tokens
+          </span>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>·</span>
+          <span
+            style={{
+              fontSize: 11,
+              padding: "3px 10px",
+              borderRadius: 20,
+              background: cfg.color + "14",
+              color: cfg.color,
+            }}
+          >
+            {cfg.label}
           </span>
         </div>
       </div>

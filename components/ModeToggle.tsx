@@ -6,38 +6,50 @@ interface Props {
 }
 
 export default function ModeToggle({ mode, onToggle }: Props) {
+  const isChat = mode === "chat";
+
   return (
     <button
       onClick={onToggle}
-      className="fixed bottom-5 right-5 z-30 flex items-center gap-2 rounded-full px-4 py-2.5 transition-all"
       style={{
-        background: "var(--surface-2)",
+        position: "fixed",
+        bottom: 20,
+        right: 20,
+        zIndex: 30,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "9px 16px",
+        borderRadius: 24,
+        background: "rgba(22,22,20,0.9)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
         border: "1px solid var(--border-hover)",
-        color: "var(--text-primary)",
+        color: "var(--text-secondary)",
+        fontSize: 13,
+        fontWeight: 500,
         cursor: "pointer",
-        boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+        transition: "all 0.15s ease",
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)";
-        (e.currentTarget as HTMLElement).style.boxShadow =
-          "0 4px 24px rgba(0,113,227,0.2)";
+        (e.currentTarget as HTMLElement).style.borderColor = "var(--border-strong)";
+        (e.currentTarget as HTMLElement).style.color = "var(--text-primary)";
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLElement).style.borderColor = "var(--border-hover)";
-        (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 24px rgba(0,0,0,0.4)";
+        (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)";
       }}
     >
-      {mode === "chat" ? (
+      {isChat ? (
         <>
-          {/* Bubble icon */}
+          {/* Bubble dots icon */}
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <circle cx="4" cy="7" r="3" fill="var(--accent)" opacity="0.7" />
-            <circle cx="10" cy="4" r="2" fill="#3b82f6" opacity="0.7" />
-            <circle cx="10.5" cy="10.5" r="2.5" fill="#22c55e" opacity="0.7" />
+            <circle cx="4" cy="7" r="2.5" fill="var(--accent)" opacity="0.8" />
+            <circle cx="10" cy="4.5" r="1.8" fill="#3b82f6" opacity="0.8" />
+            <circle cx="10.5" cy="10" r="2" fill="#3ecf8e" opacity="0.8" />
           </svg>
-          <span className="text-xs font-medium">Context View</span>
+          Context view
         </>
       ) : (
         <>
@@ -46,10 +58,10 @@ export default function ModeToggle({ mode, onToggle }: Props) {
             <path
               d="M2 2h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H5l-3 2V3a1 1 0 0 1 1-1Z"
               fill="var(--accent)"
-              opacity="0.7"
+              opacity="0.8"
             />
           </svg>
-          <span className="text-xs font-medium">Chat Mode</span>
+          Chat mode
         </>
       )}
     </button>
