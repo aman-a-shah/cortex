@@ -35,6 +35,7 @@ export interface ComposioTool {
 }
 
 export interface SessionPayload {
+  userId: string;
   department: Department;
   name: string;
   iat: number;

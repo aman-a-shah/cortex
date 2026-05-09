@@ -66,7 +66,7 @@ Respond with valid JSON only:
 
   // Store in global context
   const contextText = `Product Innovation: "${productIdea}" for ${company}. ${result.stakeholderBrief}`;
-  const contextEntry = addContextEntry({
+  const contextEntry = await addContextEntry({
     department: "product",
     text: contextText,
     summary: `Innovation: ${productIdea} @ ${company}`,

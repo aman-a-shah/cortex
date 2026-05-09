@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import MessageList from "./MessageList";
 import InputBar from "./InputBar";
@@ -35,46 +35,30 @@ export default function ChatMode({
   const [streaming, setStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
-  const convIdCounter = useRef(0);
 
-  // Conversations persisted to localStorage
-  const [conversations, setConversations] = useState<Conversation[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const stored = localStorage.getItem(`cortex_convs_${initialDept}`);
-      return stored ? JSON.parse(stored) : [];
-    } catch { return []; }
-  });
+  const [conversations, setConversations] = useState<Conversation[]>([]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(`cortex_convs_${initialDept}`, JSON.stringify(conversations.slice(0, 12)));
-    } catch { /* ignore */ }
-  }, [conversations, initialDept]);
+    let cancelled = false;
 
-  // Save current conversation when messages change
-  const messagesRef = useRef(messages);
-  messagesRef.current = messages;
+    async function loadConversations() {
+      try {
+        const res = await fetch("/api/chat/threads");
+        if (!res.ok) return;
+        const data: Conversation[] = await res.json();
+        if (!cancelled) setConversations(data);
+      } catch {
+        console.error("Failed to load chat history");
+      }
+    }
 
-  function saveCurrentConversation(msgs: ChatMessage[]) {
-    if (msgs.length === 0 || !activeConvId) return;
-    const title = msgs.find((m) => m.role === "user")?.content.slice(0, 52) ?? "Conversation";
-    setConversations((prev) => {
-      const exists = prev.find((c) => c.id === activeConvId);
-      const updated: Conversation = {
-        id: activeConvId,
-        title,
-        department,
-        messages: msgs,
-        timestamp: new Date().toISOString(),
-      };
-      if (exists) return prev.map((c) => (c.id === activeConvId ? updated : c));
-      return [updated, ...prev];
-    });
-  }
+    loadConversations();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function handleNewChat() {
-    saveCurrentConversation(messagesRef.current);
     setMessages([]);
     setStreamContent("");
     setStreaming(false);
@@ -82,7 +66,6 @@ export default function ChatMode({
   }
 
   function handleSelectConversation(id: string) {
-    saveCurrentConversation(messagesRef.current);
     const conv = conversations.find((c) => c.id === id);
     if (!conv) return;
     setMessages(conv.messages);
@@ -93,12 +76,7 @@ export default function ChatMode({
 
   const handleSend = useCallback(
     async (text: string) => {
-      // Start new conversation if needed
       let convId = activeConvId;
-      if (!convId) {
-        convId = `conv-${Date.now()}-${++convIdCounter.current}`;
-        setActiveConvId(convId);
-      }
 
       const userMsg: ChatMessage = {
         id: `msg-${Date.now()}`,
@@ -117,8 +95,14 @@ export default function ChatMode({
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: apiMessages, department }),
+          body: JSON.stringify({ messages: apiMessages, threadId: convId }),
         });
+
+        const responseThreadId = res.headers.get("X-Cortex-Thread-Id");
+        if (responseThreadId && responseThreadId !== convId) {
+          convId = responseThreadId;
+          setActiveConvId(responseThreadId);
+        }
 
         if (!res.body) throw new Error("No stream");
 
@@ -150,7 +134,6 @@ export default function ChatMode({
         const finalMessages = [...nextMessages, assistantMsg];
         setMessages(finalMessages);
 
-        // Persist conversation
         const title = text.slice(0, 52);
         setConversations((prev) => {
           const exists = prev.find((c) => c.id === convId);

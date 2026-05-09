@@ -23,14 +23,19 @@ const DEPT_PASSWORDS: Record<Department, string> = {
 const DEMO_PASSWORD = "cortex2025";
 
 export interface SessionPayload {
+  userId: string;
   department: Department;
   name: string;
   iat: number;
   exp: number;
 }
 
-export async function signToken(department: Department, name: string): Promise<string> {
-  return new SignJWT({ department, name })
+export async function signToken(
+  userId: string,
+  department: Department,
+  name: string
+): Promise<string> {
+  return new SignJWT({ userId, department, name })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(TOKEN_EXPIRY)
