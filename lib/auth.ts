@@ -11,16 +11,16 @@ const TOKEN_EXPIRY = "8h";
 // Department credentials — in production these would be in Cystack Locker
 // and verified against your IdP. For the demo, each dept has a shared password.
 const DEPT_PASSWORDS: Record<Department, string> = {
-  engineering: "eng2025",
-  marketing: "mkt2025",
-  finance: "fin2025",
-  legal: "leg2025",
-  product: "prd2025",
-  management: "mgmt2025",
+  engineering: "eng2026",
+  marketing: "mkt2026",
+  finance: "fin2026",
+  legal: "leg2026",
+  product: "prd2026",
+  management: "mgmt2026",
 };
 
 // Master demo password that works for any department
-const DEMO_PASSWORD = "cortex2025";
+const DEMO_PASSWORD = "cortex2026";
 
 export interface SessionPayload {
   userId: string;

@@ -65,6 +65,24 @@ export default function ChatMode({
     setActiveConvId(null);
   }
 
+  const handleDeleteConversation = useCallback(async (id: string, withContext: boolean) => {
+    // Optimistically remove from state
+    setConversations(prev => prev.filter(c => c.id !== id));
+    if (activeConvId === id) handleNewChat();
+
+    // Delete thread
+    await fetch(`/api/chat/threads/${id}`, { method: "DELETE" });
+
+    // Optionally delete context
+    if (withContext) {
+      await fetch("/api/context", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ department }),
+      });
+    }
+  }, [activeConvId, department]);
+
   function handleSelectConversation(id: string) {
     const conv = conversations.find((c) => c.id === id);
     if (!conv) return;
@@ -166,6 +184,7 @@ export default function ChatMode({
         onNewChat={handleNewChat}
         onSelectConversation={handleSelectConversation}
         onLogout={onLogout}
+        onDeleteConversation={handleDeleteConversation}
       />
 
       {/* Main chat column */}

@@ -1,8 +1,58 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DEPT_CONFIG } from "@/lib/dept-config";
 import type { ChatMessage, Department } from "@/types";
+
+// ─── PDF export ───────────────────────────────────────────────────────────────
+function escHtml(s: string) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function exportAsPdf(text: string) {
+  // Convert markdown to minimal HTML for the print view
+  let body = escHtml(text);
+  // Code blocks first (before other replacements corrupt them)
+  body = body.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang, code) =>
+    `<div class="code-wrap">${lang ? `<div class="lang">${escHtml(lang)}</div>` : ""}<pre>${code.trim()}</pre></div>`
+  );
+  body = body.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+  body = body.replace(/^## (.+)$/gm, "<h2>$1</h2>");
+  body = body.replace(/^# (.+)$/gm, "<h1>$1</h1>");
+  body = body.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  body = body.replace(/\*(.+?)\*/g, "<em>$1</em>");
+  body = body.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  body = body.replace(/^[-*+] (.+)$/gm, "<li>$1</li>");
+  body = body.replace(/(<li>[\s\S]*?<\/li>)(\n(?!<li>))/g, "<ul>$1</ul>$2");
+  body = body.replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>");
+  body = `<p>${body}</p>`;
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Cortex Response</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:760px;margin:48px auto;padding:0 24px;color:#1a1a1a;font-size:14px;line-height:1.7}
+  h1{font-size:22px;font-weight:600;margin:24px 0 8px;border-bottom:1px solid #e0e0e0;padding-bottom:6px}
+  h2{font-size:17px;font-weight:600;margin:20px 0 6px}
+  h3{font-size:14px;font-weight:600;margin:16px 0 4px}
+  p{margin:6px 0}
+  code{background:#f2f2f2;padding:1px 5px;border-radius:3px;font-family:ui-monospace,monospace;font-size:0.88em}
+  .code-wrap{background:#f6f6f6;border:1px solid #e0e0e0;border-radius:8px;margin:12px 0;overflow:hidden}
+  .lang{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#888;padding:5px 14px 4px;border-bottom:1px solid #e0e0e0;background:#efefef}
+  pre{margin:0;padding:12px 16px;font-family:ui-monospace,monospace;font-size:12.5px;line-height:1.6;overflow-x:auto;white-space:pre}
+  ul,ol{padding-left:20px;margin:6px 0}
+  li{margin:2px 0}
+  strong{font-weight:600}
+  @media print{body{margin:24px auto}pre{white-space:pre-wrap}}
+</style>
+</head><body>${body}</body></html>`;
+
+  const win = window.open("", "_blank", "width=900,height=700");
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+  // Small delay lets the browser finish rendering before print dialog
+  setTimeout(() => { win.focus(); win.print(); }, 350);
+}
 
 // ─── Markdown renderer ────────────────────────────────────────────────────────
 
@@ -41,13 +91,33 @@ function renderInline(text: string): React.ReactNode[] {
 }
 
 function CodeBlock({ lang, code }: { lang: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code.trim()).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
   return (
-    <div style={{ margin: "10px 0", borderRadius: 10, background: "rgba(0,0,0,0.45)", border: "1px solid rgba(255,255,255,0.07)", overflow: "hidden" }}>
-      {lang && (
-        <div style={{ padding: "5px 14px 4px", borderBottom: "1px solid rgba(255,255,255,0.06)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.08em", background: "rgba(255,255,255,0.02)" }}>
-          {lang.toUpperCase()}
-        </div>
-      )}
+    <div style={{ margin: "10px 0", borderRadius: 10, background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.07)", overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 14px 4px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
+        <span style={{ fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
+          {(lang || "code").toUpperCase()}
+        </span>
+        <button
+          onClick={handleCopy}
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            padding: "2px 8px", borderRadius: 4,
+            fontSize: 10, letterSpacing: "0.04em",
+            color: copied ? "var(--green)" : "var(--text-muted)",
+            transition: "color 0.15s ease",
+          }}
+        >
+          {copied ? "✓ Copied" : "Copy"}
+        </button>
+      </div>
       <pre style={{ margin: 0, padding: "12px 16px", fontSize: 12.5, fontFamily: "ui-monospace, 'SF Mono', monospace", color: "rgba(255,255,255,0.82)", lineHeight: 1.65, overflowX: "auto", whiteSpace: "pre" }}>
         <code>{code.trim()}</code>
       </pre>
@@ -64,16 +134,13 @@ function TextSegment({ content, accentColor }: { content: string; accentColor: s
     const line    = allLines[i];
     const trimmed = line.trim();
 
-    // Leading blank lines — skip
     if (!trimmed && nodes.length === 0) { i++; continue; }
 
-    // Horizontal rule
     if (/^[-*_]{3,}\s*$/.test(trimmed)) {
       nodes.push(<div key={`hr-${i}`} style={{ borderTop: "1px solid var(--border)", margin: "14px 0" }} />);
       i++; continue;
     }
 
-    // Headings
     const hMatch = trimmed.match(/^(#{1,3})\s+(.+)$/);
     if (hMatch) {
       const level = hMatch[1].length;
@@ -94,7 +161,6 @@ function TextSegment({ content, accentColor }: { content: string; accentColor: s
       i++; continue;
     }
 
-    // Bullet list — collect consecutive bullets
     if (/^\s*[-*+]\s/.test(line)) {
       const items: string[] = [];
       while (i < allLines.length && /^\s*[-*+]\s/.test(allLines[i])) {
@@ -104,7 +170,7 @@ function TextSegment({ content, accentColor }: { content: string; accentColor: s
       nodes.push(
         <ul key={`ul-${i}`} style={{ margin: "6px 0 6px 4px", paddingLeft: 18, display: "flex", flexDirection: "column", gap: 3 }}>
           {items.map((item, j) => (
-            <li key={j} style={{ fontSize: 13.5, color: "var(--text-primary)", lineHeight: 1.6, paddingLeft: 2 }}>
+            <li key={j} style={{ fontSize: 13.5, color: "var(--text-primary)", lineHeight: 1.6, paddingLeft: 2, wordBreak: "break-word", overflowWrap: "break-word" }}>
               {renderInline(item)}
             </li>
           ))}
@@ -113,7 +179,6 @@ function TextSegment({ content, accentColor }: { content: string; accentColor: s
       continue;
     }
 
-    // Numbered list
     if (/^\s*\d+\.\s/.test(line)) {
       const items: string[] = [];
       while (i < allLines.length && /^\s*\d+\.\s/.test(allLines[i])) {
@@ -123,7 +188,7 @@ function TextSegment({ content, accentColor }: { content: string; accentColor: s
       nodes.push(
         <ol key={`ol-${i}`} style={{ margin: "6px 0 6px 4px", paddingLeft: 22, display: "flex", flexDirection: "column", gap: 3 }}>
           {items.map((item, j) => (
-            <li key={j} style={{ fontSize: 13.5, color: "var(--text-primary)", lineHeight: 1.6 }}>
+            <li key={j} style={{ fontSize: 13.5, color: "var(--text-primary)", lineHeight: 1.6, wordBreak: "break-word", overflowWrap: "break-word" }}>
               {renderInline(item)}
             </li>
           ))}
@@ -132,7 +197,6 @@ function TextSegment({ content, accentColor }: { content: string; accentColor: s
       continue;
     }
 
-    // Blockquote
     if (/^\s*>\s?/.test(line)) {
       const bqLines: string[] = [];
       while (i < allLines.length && /^\s*>\s?/.test(allLines[i])) {
@@ -142,7 +206,7 @@ function TextSegment({ content, accentColor }: { content: string; accentColor: s
       nodes.push(
         <div key={`bq-${i}`} style={{ borderLeft: `2px solid ${accentColor}50`, paddingLeft: 12, margin: "8px 0" }}>
           {bqLines.map((l, j) => (
-            <p key={j} style={{ margin: "2px 0", fontSize: 13, color: "var(--text-secondary)", fontStyle: "italic", lineHeight: 1.6 }}>
+            <p key={j} style={{ margin: "2px 0", fontSize: 13, color: "var(--text-secondary)", fontStyle: "italic", lineHeight: 1.6, wordBreak: "break-word", overflowWrap: "break-word" }}>
               {renderInline(l)}
             </p>
           ))}
@@ -151,15 +215,13 @@ function TextSegment({ content, accentColor }: { content: string; accentColor: s
       continue;
     }
 
-    // Empty line — small spacer between paragraphs
     if (!trimmed) {
       if (nodes.length > 0) nodes.push(<div key={`sp-${i}`} style={{ height: 6 }} />);
       i++; continue;
     }
 
-    // Normal text line
     nodes.push(
-      <p key={`p-${i}`} style={{ margin: "1px 0", fontSize: 13.5, lineHeight: 1.7, color: "var(--text-primary)" }}>
+      <p key={`p-${i}`} style={{ margin: "1px 0", fontSize: 13.5, lineHeight: 1.7, color: "var(--text-primary)", wordBreak: "break-word", overflowWrap: "break-word" }}>
         {renderInline(trimmed)}
       </p>
     );
@@ -178,6 +240,56 @@ function MarkdownContent({ text, accentColor }: { text: string; accentColor: str
           ? <CodeBlock key={i} lang={seg.lang} code={seg.code} />
           : <TextSegment key={i} content={seg.content} accentColor={accentColor} />
       )}
+    </div>
+  );
+}
+
+// Action bar shown below long assistant messages
+function MessageActions({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+      <button
+        onClick={handleCopy}
+        style={{
+          display: "flex", alignItems: "center", gap: 5,
+          background: "none", border: "1px solid var(--border)",
+          borderRadius: 6, padding: "3px 10px", cursor: "pointer",
+          fontSize: 11, color: copied ? "var(--green)" : "var(--text-muted)",
+          transition: "color 0.15s, border-color 0.15s",
+        }}
+        onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--border-hover)")}
+        onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border)")}
+      >
+        {copied ? "✓ Copied" : "Copy"}
+      </button>
+      <button
+        onClick={() => exportAsPdf(text)}
+        style={{
+          display: "flex", alignItems: "center", gap: 5,
+          background: "none", border: "1px solid var(--border)",
+          borderRadius: 6, padding: "3px 10px", cursor: "pointer",
+          fontSize: 11, color: "var(--text-muted)",
+          transition: "color 0.15s, border-color 0.15s",
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border-hover)";
+          (e.currentTarget as HTMLButtonElement).style.color = "var(--text-secondary)";
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)";
+          (e.currentTarget as HTMLButtonElement).style.color = "var(--text-muted)";
+        }}
+      >
+        ↓ Save as PDF
+      </button>
     </div>
   );
 }
@@ -220,9 +332,10 @@ export default function MessageList({ messages, streaming, streamContent, depart
       <div style={{ maxWidth: 720, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", gap: 6 }}>
 
         {messages.map((msg, idx) => {
-          const isUser   = msg.role === "user";
-          const prevMsg  = idx > 0 ? messages[idx - 1] : null;
+          const isUser    = msg.role === "user";
+          const prevMsg   = idx > 0 ? messages[idx - 1] : null;
           const showAvatar = !isUser && prevMsg?.role !== "assistant";
+          const isLong    = !isUser && msg.content.length > 350;
 
           return (
             <div
@@ -237,7 +350,8 @@ export default function MessageList({ messages, streaming, streamContent, depart
                 </div>
               )}
 
-              <div style={{ maxWidth: "78%", display: "flex", flexDirection: "column", gap: 4, alignItems: isUser ? "flex-end" : "flex-start" }}>
+              {/* Message content — minWidth:0 is critical for flex shrink to respect maxWidth */}
+              <div style={{ maxWidth: "70%", minWidth: 0, display: "flex", flexDirection: "column", gap: 4, alignItems: isUser ? "flex-end" : "flex-start" }}>
                 <div style={{
                   padding: isUser ? "9px 15px" : "12px 16px",
                   borderRadius: isUser ? "18px 18px 4px 18px" : "4px 18px 18px 18px",
@@ -245,12 +359,18 @@ export default function MessageList({ messages, streaming, streamContent, depart
                   color: "var(--text-primary)",
                   background: isUser ? cfg.color + "1e" : "var(--surface-2)",
                   border: isUser ? `1px solid ${cfg.color}33` : "1px solid var(--border)",
+                  // Ensure content never overflows the bubble
+                  minWidth: 0,
+                  overflow: "hidden",
                 }}>
                   {isUser
-                    ? <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65 }}>{msg.content}</p>
+                    ? <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, wordBreak: "break-word", overflowWrap: "break-word" }}>{msg.content}</p>
                     : <MarkdownContent text={msg.content} accentColor={cfg.color} />
                   }
                 </div>
+
+                {/* Action bar for long assistant messages */}
+                {isLong && <MessageActions text={msg.content} />}
 
                 {/* Context dept refs */}
                 {msg.contextRefs && msg.contextRefs.length > 0 && (
@@ -276,7 +396,7 @@ export default function MessageList({ messages, streaming, streamContent, depart
             <div style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--surface-2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 11, color: "var(--accent)" }}>
               ✦
             </div>
-            <div style={{ maxWidth: "78%", padding: "12px 16px", borderRadius: "4px 18px 18px 18px", fontSize: 14, lineHeight: 1.65, color: "var(--text-primary)", background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+            <div style={{ maxWidth: "70%", minWidth: 0, padding: "12px 16px", borderRadius: "4px 18px 18px 18px", fontSize: 14, lineHeight: 1.65, color: "var(--text-primary)", background: "var(--surface-2)", border: "1px solid var(--border)", overflow: "hidden" }}>
               {streamContent ? (
                 <>
                   <MarkdownContent text={streamContent} accentColor={cfg.color} />
