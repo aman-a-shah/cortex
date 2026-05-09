@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { signToken, validatePassword, TOKEN_COOKIE } from "@/lib/auth";
+import { ensureSupabaseUser } from "@/lib/supabase-auth";
 import type { Department } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -16,12 +17,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
 
-  const token = await signToken(
-    department as Department,
-    name?.trim() || department
-  );
+  const dept = department as Department;
+  const displayName = name?.trim() || department;
+  const userId = await ensureSupabaseUser(dept, displayName);
+  const token = await signToken(userId, dept, displayName);
 
-  const res = NextResponse.json({ ok: true, department });
+  const res = NextResponse.json({ ok: true, department, userId });
   res.cookies.set(TOKEN_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
