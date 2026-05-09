@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
             department: dept,
             text: extracted.text,
             summary: extracted.summary,
+            source: "chat-extract",
             tokenCount: Math.ceil(extracted.text.length / 4),
           }, session.userId);
           await notifyDepartments({

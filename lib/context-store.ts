@@ -136,9 +136,11 @@ export async function addContextEntry(
 
       if (error) throw error;
       const created = mapContextRow(data as ContextRow);
-      syncContextToBackboard(created).catch((syncError) => {
+      try {
+        await syncContextToBackboard(created);
+      } catch (syncError) {
         console.error("[backboard] context sync failed", syncError);
-      });
+      }
       return created;
     } catch (error) {
       console.error("[supabase] context write failed", error);

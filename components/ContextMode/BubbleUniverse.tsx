@@ -12,6 +12,8 @@ interface BubbleNode extends d3.SimulationNodeDatum {
   r: number;
   color: string;
   isNew: boolean;
+  isSubBubble: boolean;
+  parentId?: string;
   dept: Department;
   wavePhase: number;
 }
@@ -230,12 +232,14 @@ export default function BubbleUniverse({ entries }: Props) {
     }
 
     const nextNodes: BubbleNode[] = visibleEntries.map(entry => {
-      const r    = tokenToRadius(entry.tokenCount, allTokens);
+      const isSubBubble = entry.source === "chat-extract";
+      const baseR = tokenToRadius(entry.tokenCount, allTokens);
+      const r = isSubBubble ? Math.max(MIN_R * 0.45, baseR * 0.55) : baseR;
       const cfg  = DEPT_CONFIG[entry.department];
       const prev = existing.get(entry.id);
       const ctr  = districtCenters[entry.department];
       return {
-        id: entry.id, entry, r,
+        id: entry.id, entry, r, isSubBubble,
         dept: entry.department, color: cfg.color,
         isNew: !prev,
         x: prev?.x ?? ctr.x + (Math.random() - 0.5) * 80,
@@ -244,6 +248,16 @@ export default function BubbleUniverse({ entries }: Props) {
         wavePhase: prev?.wavePhase ?? Math.random() * Math.PI * 2,
       };
     });
+
+    // Assign parent IDs to sub-bubbles (largest main bubble of same dept)
+    for (const node of nextNodes) {
+      if (node.isSubBubble) {
+        const parent = nextNodes
+          .filter(n => !n.isSubBubble && n.dept === node.dept)
+          .sort((a, b) => b.r - a.r)[0];
+        if (parent) node.parentId = parent.id;
+      }
+    }
 
     nodeMapRef.current = new Map(nextNodes.map(n => [n.id, n]));
     nodesRef.current   = nextNodes;
@@ -262,6 +276,13 @@ export default function BubbleUniverse({ entries }: Props) {
           if (!node.fx) {
             node.vx = (node.vx ?? 0) + (target.x - (node.x ?? 0)) * 0.012;
             node.vy = (node.vy ?? 0) + (target.y - (node.y ?? 0)) * 0.012;
+            if (node.isSubBubble && node.parentId) {
+              const par = nodeMapRef.current.get(node.parentId);
+              if (par) {
+                node.vx = (node.vx ?? 0) + ((par.x ?? 0) - (node.x ?? 0)) * 0.028;
+                node.vy = (node.vy ?? 0) + ((par.y ?? 0) - (node.y ?? 0)) * 0.028;
+              }
+            }
             node.vx = ((node.vx ?? 0) + (Math.random() - 0.5) * 0.10) * 0.94;
             node.vy = ((node.vy ?? 0) + (Math.random() - 0.5) * 0.10) * 0.94;
           }
@@ -327,7 +348,7 @@ export default function BubbleUniverse({ entries }: Props) {
       const currentNodes = nodesRef.current;
 
       drawGrid(ctx, w, h);
-      drawDistrictGlows(ctx, dc, currentNodes);
+      drawBubbleGlows(ctx, currentNodes);
       drawConnections(ctx, dc);
       drawIntraLinks(ctx, currentNodes);
       updateParticles(particlesRef.current, dc, currentNodes, w, h, ts);
@@ -605,6 +626,26 @@ export default function BubbleUniverse({ entries }: Props) {
             );
           })}
 
+          {/* Sub-bubble connector lines */}
+          {nodes.filter(n => n.isSubBubble && n.parentId).map(node => {
+            const parent = nodes.find(p => p.id === node.parentId);
+            if (!parent) return null;
+            const px = parent.x ?? 0, py = parent.y ?? 0;
+            const cx = node.x ?? 0, cy = node.y ?? 0;
+            const isUnfocused = focusedId !== null && node.id !== focusedId && parent.id !== focusedId;
+            return (
+              <line
+                key={`conn-${node.id}`}
+                x1={px} y1={py} x2={cx} y2={cy}
+                stroke={node.color}
+                strokeWidth={0.7}
+                strokeOpacity={isUnfocused ? 0.03 : 0.22}
+                strokeDasharray="3 6"
+                style={{ pointerEvents: "none", transition: "stroke-opacity 0.35s ease" }}
+              />
+            );
+          })}
+
           {/* Bubbles */}
           {nodes.map(node => {
             const nx = node.x ?? 0;
@@ -648,15 +689,23 @@ export default function BubbleUniverse({ entries }: Props) {
                   fill={`url(#bg-${node.dept})`}
                   stroke={node.color}
                   strokeWidth={isFocused ? 1.1 : 0.7 + prox * 0.8}
-                  strokeOpacity={isFocused ? 0.55 : 0.28 + prox * 0.35}
+                  strokeOpacity={isFocused ? 0.55 : node.isSubBubble ? 0.18 + prox * 0.25 : 0.28 + prox * 0.35}
+                  strokeDasharray={node.isSubBubble ? "4 3" : undefined}
                   style={{ animation: node.isNew ? "bubble-arrive 0.5s cubic-bezier(0.22,1,0.36,1) forwards" : undefined }}
                 />
 
                 {/* Dept emoji */}
                 <text y={0} textAnchor="middle" dominantBaseline="middle"
-                  style={{ fontSize: Math.max(15, node.r * 0.36), pointerEvents: "none", userSelect: "none", fill: node.color, opacity: 0.9 }}>
+                  style={{ fontSize: Math.max(node.isSubBubble ? 10 : 15, node.r * 0.36), pointerEvents: "none", userSelect: "none", fill: node.color, opacity: node.isSubBubble ? 0.65 : 0.9 }}>
                   {DEPT_CONFIG[node.entry.department].emoji}
                 </text>
+
+                {/* Sub-bubble indicator dot */}
+                {node.isSubBubble && (
+                  <circle r={2.5} cx={node.r * 0.55} cy={-node.r * 0.55}
+                    fill={node.color} opacity={0.5}
+                    style={{ pointerEvents: "none" }} />
+                )}
 
                 {/* Orbiting context labels — visible when focused */}
                 {isFocused && (() => {
@@ -705,7 +754,7 @@ export default function BubbleUniverse({ entries }: Props) {
           className="animate-detail-rise"
           style={{
             position: "absolute",
-            bottom: 28,
+            bottom: 90,
             left: "50%",
             transform: "translateX(-50%)",
             maxWidth: 520,
@@ -732,7 +781,7 @@ export default function BubbleUniverse({ entries }: Props) {
             textShadow: "0 2px 8px rgba(0,0,0,0.8)",
           }}>
             {DEPT_CONFIG[focusedNode.dept].label} · {new Date(focusedNode.entry.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            {focusedNode.entry.source ? ` · ${focusedNode.entry.source}` : ""} · esc to close
+            {focusedNode.isSubBubble ? " · extracted from chat" : focusedNode.entry.source ? ` · ${focusedNode.entry.source}` : ""} · esc to close
           </p>
         </div>
       )}
@@ -752,24 +801,27 @@ function drawGrid(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.restore();
 }
 
-function drawDistrictGlows(ctx: CanvasRenderingContext2D, dc: Record<Department, { x: number; y: number }>, nodes: BubbleNode[]) {
-  for (const [dept, center] of Object.entries(dc)) {
-    if (!nodes.some(n => n.dept === dept)) continue;
-    const hex = DEPT_CONFIG[dept as Department].color;
+function drawBubbleGlows(ctx: CanvasRenderingContext2D, nodes: BubbleNode[]) {
+  for (const node of nodes) {
+    const nx = node.x ?? 0;
+    const ny = node.y ?? 0;
+    const hex = node.color;
     const rv = parseInt(hex.slice(1, 3), 16);
     const gv = parseInt(hex.slice(3, 5), 16);
     const bv = parseInt(hex.slice(5, 7), 16);
-    const r  = 130;
-    const grad = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, r);
-    const N = 12;
-    for (let i = 0; i <= N; i++) {
-      const t     = i / N;
-      const alpha = 0.09 * Math.pow(1 - t, 2.4);
+    const glowR = node.r * (node.isSubBubble ? 2.4 : 3.2);
+    const maxAlpha = node.isSubBubble ? 0.055 : 0.095;
+    const grad = ctx.createRadialGradient(nx, ny, 0, nx, ny, glowR);
+    for (let i = 0; i <= 10; i++) {
+      const t = i / 10;
+      const alpha = maxAlpha * Math.pow(1 - t, 2.2);
       grad.addColorStop(t, `rgba(${rv},${gv},${bv},${alpha.toFixed(4)})`);
     }
     ctx.save();
-    ctx.beginPath(); ctx.arc(center.x, center.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = grad; ctx.fill();
+    ctx.beginPath();
+    ctx.arc(nx, ny, glowR, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
     ctx.restore();
   }
 }
