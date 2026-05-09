@@ -60,6 +60,18 @@ export default function Home() {
     setAppState("login");
   }, []);
 
+  // Presence heartbeat — lets the server know the user is active so Pingram
+  // notifications only fire while they're on the site.
+  useEffect(() => {
+    if (!session) return;
+    const beat = () => {
+      if (!document.hidden) fetch("/api/activity/heartbeat", { method: "POST" }).catch(() => {});
+    };
+    beat(); // immediate on login
+    const id = setInterval(beat, 30_000);
+    return () => clearInterval(id);
+  }, [session]);
+
   const handleToggle = useCallback(() => {
     if (appState !== "ready") return;
     const next: Mode = mode === "chat" ? "context" : "chat";
