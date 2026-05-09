@@ -9,8 +9,9 @@ import {
   createConversation,
 } from "@/lib/chat-store";
 import { notifyDepartments } from "@/lib/pingram";
+import { fetchLiveToolContext, sendContextChangeEmail } from "@/lib/composio";
 import { verifyToken, TOKEN_COOKIE } from "@/lib/auth";
-import type { Department } from "@/types";
+import type { Department, ContextEntry } from "@/types";
 
 export async function POST(req: NextRequest) {
   const token = req.cookies.get(TOKEN_COOKIE)?.value;
@@ -22,11 +23,31 @@ export async function POST(req: NextRequest) {
   const { messages, threadId } = await req.json();
   const dept = session.department as Department;
   const crossDept = await getCrossDepContext(dept);
-  const { stream } = await chatWithContext(messages, dept, crossDept);
 
   const lastUserMessage = [...messages]
     .reverse()
     .find((m: { role: string; content: string }) => m.role === "user");
+
+  // Auto-enrich context with live tool data if the message references a connected tool.
+  // Runs in parallel with other setup; 2.5s timeout so it never blocks the response.
+  const lastUserContent = lastUserMessage?.content ?? "";
+  let composioTool: string | null = null;
+  const liveCtx = await fetchLiveToolContext(lastUserContent);
+  if (liveCtx) {
+    composioTool = liveCtx.toolId;
+    const composioEntry: ContextEntry = {
+      id: "composio-live",
+      department: dept,
+      text: liveCtx.text,
+      summary: liveCtx.summary,
+      source: `composio-${liveCtx.toolId}`,
+      createdAt: new Date().toISOString(),
+      tokenCount: Math.ceil(liveCtx.text.length / 4),
+    };
+    crossDept.unshift(composioEntry);
+  }
+
+  const { stream } = await chatWithContext(messages, dept, crossDept);
 
   const currentThreadId =
     threadId ??
@@ -55,6 +76,15 @@ export async function POST(req: NextRequest) {
             sourceDept: dept,
             summary: extracted.summary,
           });
+          if (session.email) {
+            sendContextChangeEmail({
+              to: session.email,
+              senderName: session.name,
+              department: dept,
+              summary: extracted.summary,
+              source: "chat-extract",
+            }).catch(console.error);
+          }
           console.log("[cortex] stored context:", entry.id);
         }
       })
@@ -105,6 +135,7 @@ export async function POST(req: NextRequest) {
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-cache",
       ...(currentThreadId ? { "X-Cortex-Thread-Id": currentThreadId } : {}),
+      ...(composioTool ? { "X-Cortex-Composio-Tool": composioTool } : {}),
     },
   });
 }

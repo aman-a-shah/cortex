@@ -26,6 +26,7 @@ export interface SessionPayload {
   userId: string;
   department: Department;
   name: string;
+  email?: string;
   iat: number;
   exp: number;
 }
@@ -33,9 +34,10 @@ export interface SessionPayload {
 export async function signToken(
   userId: string,
   department: Department,
-  name: string
+  name: string,
+  email?: string
 ): Promise<string> {
-  return new SignJWT({ userId, department, name })
+  return new SignJWT({ userId, department, name, ...(email ? { email } : {}) })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(TOKEN_EXPIRY)

@@ -348,7 +348,6 @@ export default function BubbleUniverse({ entries }: Props) {
       const currentNodes = nodesRef.current;
 
       drawGrid(ctx, w, h);
-      drawBubbleGlows(ctx, currentNodes);
       drawConnections(ctx, dc);
       drawIntraLinks(ctx, currentNodes);
       updateParticles(particlesRef.current, dc, currentNodes, w, h, ts);
@@ -411,6 +410,7 @@ export default function BubbleUniverse({ entries }: Props) {
   }, [focusedId]);
 
   // ─── Scroll zoom ─────────────────────────────────────────────────────────
+  /*
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -436,7 +436,7 @@ export default function BubbleUniverse({ entries }: Props) {
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
-
+  */
   // ─── Pointer helpers ─────────────────────────────────────────────────────
   const screenToCanvas = useCallback((sx: number, sy: number) => {
     const vp   = viewportRef.current;

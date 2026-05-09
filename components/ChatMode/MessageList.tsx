@@ -385,6 +385,14 @@ export default function MessageList({ messages, streaming, streamContent, depart
                     })}
                   </div>
                 )}
+
+                {/* Composio tool badge */}
+                {msg.composioTool && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--green)", padding: "2px 8px", borderRadius: 12, background: "var(--green-dim)", border: "1px solid rgba(62,207,142,0.2)", width: "fit-content" }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--green)", display: "inline-block" }} />
+                    Enriched by {msg.composioTool}
+                  </div>
+                )}
               </div>
             </div>
           );

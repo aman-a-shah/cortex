@@ -4,7 +4,7 @@ import { ensureSupabaseUser } from "@/lib/supabase-auth";
 import type { Department } from "@/types";
 
 export async function POST(req: NextRequest) {
-  const { department, password, name } = await req.json();
+  const { department, password, name, email } = await req.json();
 
   if (!department || !password) {
     return NextResponse.json(
@@ -19,8 +19,9 @@ export async function POST(req: NextRequest) {
 
   const dept = department as Department;
   const displayName = name?.trim() || department;
+  const notifEmail = email?.trim() || undefined;
   const userId = await ensureSupabaseUser(dept, displayName);
-  const token = await signToken(userId, dept, displayName);
+  const token = await signToken(userId, dept, displayName, notifEmail);
 
   const res = NextResponse.json({ ok: true, department, userId });
   res.cookies.set(TOKEN_COOKIE, token, {

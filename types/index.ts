@@ -26,6 +26,7 @@ export interface ChatMessage {
   content: string;
   department: Department;
   contextRefs?: string[];
+  composioTool?: string;
   timestamp: string;
 }
 

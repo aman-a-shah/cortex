@@ -34,6 +34,7 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
   const [chipLoading, setChipLoading] = useState(false);
   const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
+  const [contextSavedTool, setContextSavedTool] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chipInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -114,6 +115,11 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
       });
       const data = await res.json();
       if (data.formatted && onToolResult) onToolResult(data.formatted);
+      if (data.contextEntryId) {
+        const chip = TOOL_CHIPS.find(c => c.id === toolId);
+        setContextSavedTool(chip ? `${chip.emoji} ${chip.label}` : toolId);
+        setTimeout(() => setContextSavedTool(null), 3000);
+      }
     } catch {
       if (onToolResult) onToolResult(`Failed to run ${toolId} tool.`);
     } finally {
@@ -290,6 +296,27 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
                 </button>
               </>
             )}
+          </div>
+        )}
+
+        {/* Composio context-saved toast */}
+        {contextSavedTool && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+              padding: "7px 12px",
+              borderRadius: 10,
+              background: "var(--green-dim)",
+              border: "1px solid rgba(62,207,142,0.22)",
+              fontSize: 12,
+              color: "var(--green)",
+              animation: "msg-in 0.22s ease forwards",
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green)", flexShrink: 0, display: "inline-block" }} />
+            {contextSavedTool} data saved to bubble universe
           </div>
         )}
 

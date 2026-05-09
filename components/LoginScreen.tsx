@@ -15,6 +15,7 @@ interface Props {
 export default function LoginScreen({ onLogin }: Props) {
   const [selectedDept, setSelectedDept] = useState<Department | null>(null);
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,7 +31,7 @@ export default function LoginScreen({ onLogin }: Props) {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ department: selectedDept, password, name }),
+        body: JSON.stringify({ department: selectedDept, password, name, email: email.trim() || undefined }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -131,6 +132,32 @@ export default function LoginScreen({ onLogin }: Props) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Alex"
+              style={{
+                width: "100%",
+                padding: "10px 14px",
+                borderRadius: 10,
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+                fontSize: 14,
+                outline: "none",
+                transition: "border-color 0.15s",
+              }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = cfg ? cfg.color + "55" : "var(--border-hover)")}
+              onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+            />
+          </div>
+
+          {/* Email */}
+          <div>
+            <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 8, letterSpacing: "0.06em" }}>
+              Email <span style={{ opacity: 0.6 }}>(optional — for context change alerts)</span>
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
               style={{
                 width: "100%",
                 padding: "10px 14px",

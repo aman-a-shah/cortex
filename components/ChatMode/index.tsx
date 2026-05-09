@@ -122,6 +122,8 @@ export default function ChatMode({
           setActiveConvId(responseThreadId);
         }
 
+        const composioToolHeader = res.headers.get("X-Cortex-Composio-Tool");
+
         if (!res.body) throw new Error("No stream");
 
         const reader = res.body.getReader();
@@ -147,6 +149,7 @@ export default function ChatMode({
           content: accumulated,
           department,
           contextRefs: [...new Set(contextRefs)],
+          ...(composioToolHeader ? { composioTool: composioToolHeader } : {}),
           timestamp: new Date().toISOString(),
         };
         const finalMessages = [...nextMessages, assistantMsg];
