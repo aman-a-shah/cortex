@@ -37,7 +37,7 @@ export default function LoadingScreen({ onComplete }: Props) {
         }}
       >
         {/* Cortex mark */}
-        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+        <svg width="48" height="48" viewBox="0 0 36 36" fill="none">
           <circle cx="18" cy="18" r="17" stroke="var(--text-primary)" strokeWidth="1.2" opacity="0.6" />
           <circle cx="18" cy="18" r="5" fill="var(--accent)" opacity="0.9" />
           <line x1="18" y1="1" x2="18" y2="11" stroke="var(--text-primary)" strokeWidth="1.2" opacity="0.5" />

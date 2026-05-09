@@ -56,7 +56,7 @@ const MAX_R = 78;
 const DISTRICT_POS: Record<Department, [number, number]> = {
   engineering:  [0.70, 0.26],
   marketing:    [0.22, 0.30],
-  finance:      [0.16, 0.72],
+  finance:      [0.27, 0.72],
   legal:        [0.78, 0.70],
   product:      [0.50, 0.54],
   management:   [0.50, 0.16],
@@ -77,6 +77,64 @@ const DEPT_LABELS: Record<Department, string[]> = {
   product:      ["roadmap", "sprint", "OKR sync", "user story", "backlog", "retro"],
   management:   ["strategy", "1:1", "hiring", "OKR", "board prep", "sync"],
 };
+
+
+// ─── Entry similarity & merging ───────────────────────────────────────────────
+const MERGE_STOP = new Set([
+  "a","an","the","and","or","but","in","on","at","to","for","of","by","as","is","it","its","was","be","been","are","were","that","this","with","from","have","has","had","not","all","we","our","their","they","them","there","which","when","what","who","how","also","into","will","would","could","should","some","any","each","than","then","just","more","most","over","very","only","if","do","did","so","up","out","after","before","during","been","been","such","both","he","she","his","her","him","you","your","my","me","us","no","yes","new","now","can","may","must","yet","even","already","about","other","many","much","few","per","via","next","last","same","since","while","still","too","well","back","own","off","got","get","set","let","put","run","use","need","seem","want","make","take","give","show","know","see","say","go","come","look","work","turn","keep","help","move","live","play","hold","lead","read","grow","open","walk","win","offer","point","start","end","call","ask","try","feel",
+]);
+
+function significantWords(text: string): Set<string> {
+  return new Set(
+    text.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter(w => w.length >= 3 && !MERGE_STOP.has(w))
+  );
+}
+
+function jaccardSim(a: Set<string>, b: Set<string>): number {
+  let inter = 0;
+  for (const w of a) if (b.has(w)) inter++;
+  const union = a.size + b.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+function mergeSimilarEntries(entries: ContextEntry[]): ContextEntry[] {
+  const THRESHOLD = 0.30;
+  const absorbed = new Set<string>();
+  const result: ContextEntry[] = [];
+
+  for (let i = 0; i < entries.length; i++) {
+    if (absorbed.has(entries[i].id)) continue;
+    let current = entries[i];
+    let currentWords = significantWords(current.summary + " " + current.text.slice(0, 300));
+
+    for (let j = i + 1; j < entries.length; j++) {
+      if (absorbed.has(entries[j].id)) continue;
+      if (entries[j].department !== current.department) continue;
+      const other = entries[j];
+      const otherWords = significantWords(other.summary + " " + other.text.slice(0, 300));
+      if (jaccardSim(currentWords, otherWords) >= THRESHOLD) {
+        absorbed.add(other.id);
+        const mergedId = [current.id, other.id].sort().join("+");
+        current = {
+          ...current,
+          id: mergedId,
+          text: current.text + "\n\n" + other.text,
+          summary: current.summary + " · " + other.summary,
+          tokenCount: current.tokenCount + other.tokenCount,
+          createdAt: current.createdAt > other.createdAt ? current.createdAt : other.createdAt,
+        };
+        currentWords = significantWords(current.summary + " " + current.text.slice(0, 300));
+      }
+    }
+
+    result.push(current);
+  }
+
+  return result;
+}
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 function tokenToRadius(tokens: number, all: number[]): number {
@@ -118,7 +176,7 @@ function wavyCirclePath(r: number, amplitude: number, phase: number, mouseAngle:
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
+export default function BubbleUniverse({ entries }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const rafRef       = useRef<number>(0);
@@ -129,7 +187,10 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
   const [mousePos, setMousePos] = useState({ x: -9999, y: -9999 });
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [viewport, setViewport]   = useState<Viewport>({ x: 0, y: 0, scale: 1 });
+  const [focusedTags, setFocusedTags] = useState<string[]>([]);
+  const [tagsLoading, setTagsLoading] = useState(false);
 
+  const tagsCacheRef = useRef<Map<string, string[]>>(new Map());
   const nodeMapRef   = useRef<Map<string, BubbleNode>>(new Map());
   const simRef       = useRef<d3.Simulation<BubbleNode, undefined> | null>(null);
   const nodesRef     = useRef<BubbleNode[]>([]);
@@ -137,6 +198,7 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
   const dimsRef      = useRef({ w: 0, h: 0 });
   const dragRef      = useRef<DragState | null>(null);
   const vpAnimRef    = useRef<VpAnim | null>(null);
+  const orbitTimeRef = useRef<number>(0);
   // Temporarily override district center for a dept while dragging (makes same-dept nodes follow)
   const tempCentersRef = useRef<Partial<Record<Department, { x: number; y: number }>>>({});
 
@@ -158,7 +220,8 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
   useEffect(() => {
     if (dims.w === 0 || entries.length === 0) return;
     const { w, h } = dims;
-    const allTokens = entries.map(e => e.tokenCount);
+    const visibleEntries = mergeSimilarEntries(entries);
+    const allTokens = visibleEntries.map(e => e.tokenCount);
     const existing  = nodeMapRef.current;
 
     const districtCenters: Record<Department, { x: number; y: number }> = {} as never;
@@ -166,7 +229,7 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
       districtCenters[dept as Department] = { x: fx * w, y: fy * h };
     }
 
-    const nextNodes: BubbleNode[] = entries.map(entry => {
+    const nextNodes: BubbleNode[] = visibleEntries.map(entry => {
       const r    = tokenToRadius(entry.tokenCount, allTokens);
       const cfg  = DEPT_CONFIG[entry.department];
       const prev = existing.get(entry.id);
@@ -197,10 +260,10 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
           // Use temp center if dragging this dept so same-dept bubbles drift to follow
           const target = tempCentersRef.current[node.dept] ?? districtCenters[node.dept];
           if (!node.fx) {
-            node.vx = (node.vx ?? 0) + (target.x - (node.x ?? 0)) * 0.018;
-            node.vy = (node.vy ?? 0) + (target.y - (node.y ?? 0)) * 0.018;
-            node.vx += (Math.random() - 0.5) * 0.3;
-            node.vy += (Math.random() - 0.5) * 0.3;
+            node.vx = (node.vx ?? 0) + (target.x - (node.x ?? 0)) * 0.012;
+            node.vy = (node.vy ?? 0) + (target.y - (node.y ?? 0)) * 0.012;
+            node.vx = ((node.vx ?? 0) + (Math.random() - 0.5) * 0.10) * 0.94;
+            node.vy = ((node.vy ?? 0) + (Math.random() - 0.5) * 0.10) * 0.94;
           }
           node.wavePhase = (node.wavePhase + 0.022) % (Math.PI * 2);
           node.x = Math.max(node.r + 16, Math.min(w - node.r - 16, node.x ?? w / 2));
@@ -230,6 +293,9 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
     function frame(ts: number) {
       if (!ctx) return;
 
+      // Tick orbit time (drives SVG context label rotation)
+      orbitTimeRef.current = ts;
+
       // Advance viewport animation
       const anim = vpAnimRef.current;
       if (anim) {
@@ -247,7 +313,8 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
       }
 
       const vp = viewportRef.current;
-      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "#242424";
+      ctx.fillRect(0, 0, w, h);
 
       ctx.save();
       ctx.translate(vp.x, vp.y);
@@ -268,7 +335,6 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
       drawParticles(ctx, particlesRef.current);
 
       ctx.restore();
-      drawVignette(ctx, w, h);
 
       rafRef.current = requestAnimationFrame(frame);
     }
@@ -288,6 +354,67 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [focusedId]);
+
+  // ─── Fetch tags for focused bubble ───────────────────────────────────────
+  useEffect(() => {
+    if (!focusedId) { setFocusedTags([]); setTagsLoading(false); return; }
+
+    const cached = tagsCacheRef.current.get(focusedId);
+    if (cached) { setFocusedTags(cached); setTagsLoading(false); return; }
+
+    setFocusedTags([]);
+    setTagsLoading(true);
+    const node = nodesRef.current.find(n => n.id === focusedId);
+    if (!node) return;
+
+    let cancelled = false;
+    fetch("/api/tags", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        summary: node.entry.summary,
+        text: node.entry.text,
+        department: node.entry.department,
+      }),
+    })
+      .then(r => r.json())
+      .then((tags: string[]) => {
+        if (cancelled) return;
+        tagsCacheRef.current.set(focusedId, tags);
+        setFocusedTags(tags);
+        setTagsLoading(false);
+      })
+      .catch(() => { if (!cancelled) setTagsLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [focusedId]);
+
+  // ─── Scroll zoom ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const factor = e.deltaY < 0 ? 1.06 : 1 / 1.06;
+      // Chain off current animation target so rapid scrolls accumulate smoothly
+      const base = vpAnimRef.current?.target ?? viewportRef.current;
+      const newScale = Math.max(0.8, Math.min(1.2, base.scale * factor));
+      const pivotX = (mx - base.x) / base.scale;
+      const pivotY = (my - base.y) / base.scale;
+      const newX = mx - pivotX * newScale;
+      const newY = my - pivotY * newScale;
+      vpAnimRef.current = {
+        start: { ...viewportRef.current },
+        target: { x: newX, y: newY, scale: newScale },
+        startTime: -1, duration: 130,
+      };
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
 
   // ─── Pointer helpers ─────────────────────────────────────────────────────
   const screenToCanvas = useCallback((sx: number, sy: number) => {
@@ -340,9 +467,13 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
 
     if (ds.type === "pan") {
       const { w, h } = dimsRef.current;
-      const maxPan = Math.max(w, h) * 0.45;
-      const newX = Math.max(-maxPan, Math.min(maxPan, ds.startVpX + dx));
-      const newY = Math.max(-maxPan * 0.6, Math.min(maxPan * 0.6, ds.startVpY + dy));
+      const scale = viewportRef.current.scale;
+      // Keep bounds symmetric around the natural center (canvas center at screen center)
+      const centerX = (w / 2) * (1 - scale);
+      const centerY = (h / 2) * (1 - scale);
+      const halfRange = Math.max(w, h) * 0.45;
+      const newX = Math.max(centerX - halfRange, Math.min(centerX + halfRange, ds.startVpX + dx));
+      const newY = Math.max(centerY - halfRange, Math.min(centerY + halfRange, ds.startVpY + dy));
       const newVp = { ...viewportRef.current, x: newX, y: newY };
       viewportRef.current = newVp;
       setViewport(newVp);
@@ -377,7 +508,7 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
             vpAnimRef.current = { start: { ...viewportRef.current }, target: { x: 0, y: 0, scale: 1 }, startTime: -1, duration: 420 };
           } else {
             const { w, h } = dimsRef.current;
-            const scale = 2.2;
+            const scale = 1.04;
             const nx = node.x ?? w / 2;
             const ny = node.y ?? h / 2;
             setFocusedId(ds.nodeId);
@@ -467,7 +598,7 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
             const cfg = DEPT_CONFIG[dept];
             return (
               <text key={dept} x={x} y={y} textAnchor="middle" fill={cfg.color}
-                opacity={focusedId ? 0.06 : 0.22}
+                opacity={focusedId ? 0.06 : 0.42}
                 style={{ fontSize: 10, letterSpacing: "0.14em", pointerEvents: "none", userSelect: "none", transition: "opacity 0.4s" }}>
                 {cfg.label.toUpperCase()}
               </text>
@@ -500,15 +631,15 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
               >
                 {/* New-entry ring pulse */}
                 {node.isNew && (
-                  <circle r={node.r * 1.15} fill="none" stroke={node.color} strokeWidth="1"
-                    style={{ animation: "ring-pulse 1.6s ease-out forwards", pointerEvents: "none" }} />
+                  <circle r={node.r * 1.08} fill="none" stroke={node.color} strokeWidth="0.6"
+                    style={{ animation: "ring-pulse 2s cubic-bezier(0.33,1,0.68,1) forwards", pointerEvents: "none" }} />
                 )}
 
                 {/* Focus ring */}
                 {isFocused && (
-                  <circle r={node.r * 1.35} fill="none" stroke={node.color}
-                    strokeWidth="0.8" strokeOpacity={0.35} strokeDasharray="4 7"
-                    style={{ animation: "ring-pulse 2.4s ease-in-out infinite", pointerEvents: "none" }} />
+                  <circle r={node.r * 1.18} fill="none" stroke={node.color}
+                    strokeWidth="0.5" strokeOpacity={0.22} strokeDasharray="4 7"
+                    style={{ animation: "ring-pulse 3s cubic-bezier(0.33,1,0.68,1) infinite", pointerEvents: "none" }} />
                 )}
 
                 {/* Wavy main bubble */}
@@ -522,154 +653,89 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
                 />
 
                 {/* Dept emoji */}
-                <text y={-4} textAnchor="middle" dominantBaseline="middle"
-                  style={{ fontSize: Math.max(15, node.r * 0.34), pointerEvents: "none", userSelect: "none", fill: node.color, opacity: 0.9 }}>
+                <text y={0} textAnchor="middle" dominantBaseline="middle"
+                  style={{ fontSize: Math.max(15, node.r * 0.36), pointerEvents: "none", userSelect: "none", fill: node.color, opacity: 0.9 }}>
                   {DEPT_CONFIG[node.entry.department].emoji}
                 </text>
 
-                {/* Token count */}
-                <text y={node.r * 0.38} textAnchor="middle" dominantBaseline="middle"
-                  fill="rgba(255,255,255,0.3)"
-                  style={{ fontSize: 9, pointerEvents: "none", userSelect: "none" }}>
-                  {node.entry.tokenCount}t
-                </text>
-
-                {/* Summary text revealed on focus */}
-                {isFocused && (
-                  <foreignObject x={-(node.r * 0.72)} y={node.r * 0.52}
-                    width={node.r * 1.44} height={56} style={{ pointerEvents: "none" }}>
-                    <div style={{
-                      fontSize: 8, color: DEPT_CONFIG[node.dept].color,
-                      opacity: 0.65, textAlign: "center", lineHeight: 1.45,
-                      overflow: "hidden", display: "-webkit-box",
-                      WebkitLineClamp: 3, WebkitBoxOrient: "vertical",
-                    }}>
-                      {node.entry.summary}
-                    </div>
-                  </foreignObject>
-                )}
+                {/* Orbiting context labels — visible when focused */}
+                {isFocused && (() => {
+                  const isLoading = tagsLoading && focusedTags.length === 0;
+                  const items = isLoading
+                    ? ["analyzing…", "context", "loading", "tags", "…"]
+                    : focusedTags;
+                  if (items.length === 0) return null;
+                  const t = orbitTimeRef.current;
+                  return items.map((item, idx) => {
+                    const ring      = idx % 3;
+                    const ringR     = node.r + [68, 110, 152][ring];
+                    const speed     = [0.000055, 0.00004, 0.000028][ring] * (ring % 2 === 0 ? 1 : -1);
+                    const baseAngle = (idx / items.length) * Math.PI * 2;
+                    const angle     = baseAngle + t * speed;
+                    const ox = Math.cos(angle) * ringR;
+                    const oy = Math.sin(angle) * ringR;
+                    const tw = Math.min(item.length * 6.2 + 16, 130);
+                    const pulse = isLoading
+                      ? 0.3 + 0.2 * Math.sin(t * 0.003 + idx * 1.3)
+                      : 0.55 + 0.35 * Math.sin(t * 0.0009 + idx * 1.3);
+                    return (
+                      <g key={isLoading ? `loading-${idx}` : item} transform={`translate(${ox},${oy})`} style={{ pointerEvents: "none", animation: `orbit-fade-in 0.5s cubic-bezier(0.22,1,0.36,1) ${idx * 0.06}s both` }}>
+                        <rect x={-tw / 2} y={-9} width={tw} height={18} rx={5}
+                          fill={node.color + (isLoading ? "08" : "14")}
+                          stroke={node.color + (isLoading ? "28" : "50")}
+                          strokeWidth={0.5} />
+                        <text textAnchor="middle" dominantBaseline="middle"
+                          fill={node.color} opacity={pulse}
+                          style={{ fontSize: 8, userSelect: "none" }}>
+                          {item}
+                        </text>
+                      </g>
+                    );
+                  });
+                })()}
               </g>
             );
           })}
         </g>
       </svg>
 
-      {/* Focus detail card — slides up from bottom */}
-      {focusedNode && <FocusCard node={focusedNode} onClose={() => {
-        setFocusedId(null);
-        vpAnimRef.current = { start: { ...viewportRef.current }, target: { x: 0, y: 0, scale: 1 }, startTime: -1, duration: 400 };
-      }} onOpenDetail={onBubbleClick} />}
-    </div>
-  );
-}
-
-// ─── Focus Card ───────────────────────────────────────────────────────────────
-function FocusCard({ node, onClose, onOpenDetail }: {
-  node: BubbleNode;
-  onClose: () => void;
-  onOpenDetail: (e: ContextEntry) => void;
-}) {
-  const cfg = DEPT_CONFIG[node.dept];
-  return (
-    <div
-      className="animate-detail-rise"
-      style={{
-        position: "absolute",
-        bottom: 20,
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: "min(600px, calc(100% - 48px))",
-        background: "rgba(19,19,18,0.97)",
-        border: `1px solid ${cfg.color}28`,
-        borderRadius: 18,
-        padding: "20px 24px",
-        backdropFilter: "blur(24px)",
-        WebkitBackdropFilter: "blur(24px)",
-        boxShadow: `0 0 80px ${cfg.color}12, 0 28px 64px rgba(0,0,0,0.75)`,
-        zIndex: 20,
-      }}
-      onPointerDown={e => e.stopPropagation()}
-    >
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-        <div style={{
-          width: 38, height: 38, borderRadius: "50%",
-          background: cfg.color + "1a", border: `1px solid ${cfg.color}38`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 18, flexShrink: 0,
-        }}>
-          {cfg.emoji}
+      {/* Focused bubble — bottom summary caption */}
+      {focusedNode && (
+        <div
+          className="animate-detail-rise"
+          style={{
+            position: "absolute",
+            bottom: 28,
+            left: "50%",
+            transform: "translateX(-50%)",
+            maxWidth: 520,
+            width: "calc(100% - 48px)",
+            textAlign: "center",
+            pointerEvents: "none",
+            zIndex: 20,
+          }}
+        >
+          <p style={{
+            margin: 0,
+            fontSize: 13.5,
+            lineHeight: 1.7,
+            color: "var(--text-secondary)",
+            textShadow: "0 2px 16px rgba(0,0,0,0.9), 0 0 40px rgba(0,0,0,0.6)",
+          }}>
+            {focusedNode.entry.summary}
+          </p>
+          <p style={{
+            margin: "5px 0 0",
+            fontSize: 11,
+            color: "var(--text-muted)",
+            opacity: 0.55,
+            textShadow: "0 2px 8px rgba(0,0,0,0.8)",
+          }}>
+            {DEPT_CONFIG[focusedNode.dept].label} · {new Date(focusedNode.entry.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {focusedNode.entry.source ? ` · ${focusedNode.entry.source}` : ""} · esc to close
+          </p>
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: cfg.color }}>{cfg.label}</div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {new Date(node.entry.createdAt).toLocaleString()}
-            {node.entry.source ? ` · ${node.entry.source}` : ""}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-          <button
-            onClick={() => onOpenDetail(node.entry)}
-            style={{
-              padding: "5px 14px", borderRadius: 8,
-              background: cfg.color + "18", border: `1px solid ${cfg.color}40`,
-              color: cfg.color, fontSize: 12, cursor: "pointer",
-              transition: "background 0.12s",
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = cfg.color + "2e")}
-            onMouseLeave={e => (e.currentTarget.style.background = cfg.color + "18")}
-          >
-            Full detail
-          </button>
-          <button
-            onClick={onClose}
-            style={{
-              width: 30, height: 30, borderRadius: 8,
-              background: "transparent", border: "1px solid var(--border)",
-              color: "var(--text-muted)", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13,
-              transition: "all 0.12s",
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--border-hover)"; (e.currentTarget as HTMLElement).style.color = "var(--text-primary)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLElement).style.color = "var(--text-muted)"; }}
-          >
-            ✕
-          </button>
-        </div>
-      </div>
-
-      {/* Summary accent block */}
-      <div style={{
-        padding: "10px 14px", borderRadius: 10,
-        background: cfg.color + "0e", borderLeft: `2px solid ${cfg.color}`,
-        marginBottom: 12,
-      }}>
-        <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", margin: 0, lineHeight: 1.55 }}>
-          {node.entry.summary}
-        </p>
-      </div>
-
-      {/* Full text */}
-      <p style={{
-        fontSize: 12.5, color: "var(--text-secondary)", margin: "0 0 14px",
-        lineHeight: 1.75, maxHeight: 130, overflowY: "auto",
-      }}>
-        {node.entry.text}
-      </p>
-
-      {/* Footer */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 11, padding: "2px 9px", borderRadius: 20, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)" }}>
-          {node.entry.tokenCount} tokens
-        </span>
-        <span style={{ fontSize: 11, color: "var(--text-muted)", opacity: 0.4 }}>·</span>
-        <span style={{ fontSize: 11, padding: "2px 9px", borderRadius: 20, background: cfg.color + "14", color: cfg.color }}>
-          {cfg.label}
-        </span>
-        <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-muted)", opacity: 0.5 }}>
-          esc to close
-        </span>
-      </div>
+      )}
     </div>
   );
 }
@@ -678,7 +744,7 @@ function FocusCard({ node, onClose, onOpenDetail }: {
 function drawGrid(ctx: CanvasRenderingContext2D, w: number, h: number) {
   const spacing = 32;
   ctx.save();
-  ctx.fillStyle = "rgba(255,255,255,0.025)";
+  ctx.fillStyle = "rgba(255,255,255,0.018)";
   for (let x = spacing; x < w; x += spacing)
     for (let y = spacing; y < h; y += spacing) {
       ctx.beginPath(); ctx.arc(x, y, 0.8, 0, Math.PI * 2); ctx.fill();
@@ -689,11 +755,18 @@ function drawGrid(ctx: CanvasRenderingContext2D, w: number, h: number) {
 function drawDistrictGlows(ctx: CanvasRenderingContext2D, dc: Record<Department, { x: number; y: number }>, nodes: BubbleNode[]) {
   for (const [dept, center] of Object.entries(dc)) {
     if (!nodes.some(n => n.dept === dept)) continue;
-    const cfg  = DEPT_CONFIG[dept as Department];
-    const r    = 140;
+    const hex = DEPT_CONFIG[dept as Department].color;
+    const rv = parseInt(hex.slice(1, 3), 16);
+    const gv = parseInt(hex.slice(3, 5), 16);
+    const bv = parseInt(hex.slice(5, 7), 16);
+    const r  = 130;
     const grad = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, r);
-    grad.addColorStop(0, cfg.color + "18");
-    grad.addColorStop(1, cfg.color + "00");
+    const N = 12;
+    for (let i = 0; i <= N; i++) {
+      const t     = i / N;
+      const alpha = 0.09 * Math.pow(1 - t, 2.4);
+      grad.addColorStop(t, `rgba(${rv},${gv},${bv},${alpha.toFixed(4)})`);
+    }
     ctx.save();
     ctx.beginPath(); ctx.arc(center.x, center.y, r, 0, Math.PI * 2);
     ctx.fillStyle = grad; ctx.fill();
@@ -703,7 +776,7 @@ function drawDistrictGlows(ctx: CanvasRenderingContext2D, dc: Record<Department,
 
 function drawConnections(ctx: CanvasRenderingContext2D, dc: Record<Department, { x: number; y: number }>) {
   ctx.save();
-  ctx.strokeStyle = "rgba(255,255,255,0.05)";
+  ctx.strokeStyle = "rgba(255,255,255,0.035)";
   ctx.lineWidth = 0.8;
   ctx.setLineDash([3, 8]);
   for (const [a, b] of CONNECTIONS) {
@@ -862,14 +935,14 @@ function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]) {
     } else if (p.type === "signal") {
       const pt   = p.t ?? 0;
       const fade = pt < 0.15 ? pt / 0.15 : pt > 0.8 ? (1 - pt) / 0.2 : 1;
-      ctx.globalAlpha = fade * 0.75;
+      ctx.globalAlpha = fade * 0.55;
       ctx.fillStyle = p.color; ctx.shadowColor = p.color; ctx.shadowBlur = p.size > 1.8 ? 6 : 3;
       ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
       ctx.shadowBlur = 0;
     } else if (p.type === "walker") {
       const age  = p.life / p.maxLife;
       const fade = age < 0.1 ? age / 0.1 : age > 0.8 ? (1 - age) / 0.2 : 1;
-      ctx.globalAlpha = fade * 0.45;
+      ctx.globalAlpha = fade * 0.32;
       ctx.fillStyle = p.color;
       ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
       if (p.label && fade > 0.2) {
@@ -880,8 +953,8 @@ function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]) {
     } else if (p.type === "orbital") {
       const age  = p.life / p.maxLife;
       const fade = age < 0.1 ? age / 0.1 : age > 0.85 ? (1 - age) / 0.15 : 1;
-      ctx.globalAlpha = fade * 0.55;
-      ctx.fillStyle = p.color; ctx.shadowColor = p.color; ctx.shadowBlur = 4;
+      ctx.globalAlpha = fade * 0.40;
+      ctx.fillStyle = p.color; ctx.shadowColor = p.color; ctx.shadowBlur = 3;
       ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
       ctx.shadowBlur = 0;
     } else if (p.type === "plane") {
@@ -907,6 +980,6 @@ function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]) {
 function drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number) {
   const grad = ctx.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, h * 0.85);
   grad.addColorStop(0, "rgba(0,0,0,0)");
-  grad.addColorStop(1, "rgba(17,17,16,0.55)");
+  grad.addColorStop(1, "rgba(36,36,36,0.38)");
   ctx.save(); ctx.fillStyle = grad; ctx.fillRect(0, 0, w, h); ctx.restore();
 }

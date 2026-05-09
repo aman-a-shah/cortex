@@ -103,6 +103,16 @@ export async function createConversation(
   }
 }
 
+export async function deleteConversation(threadId: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  try {
+    await getSupabaseAdmin().from("chat_messages").delete().eq("thread_id", threadId);
+    await getSupabaseAdmin().from("chat_threads").delete().eq("id", threadId);
+  } catch (error) {
+    console.error("[supabase] conversation delete failed", error);
+  }
+}
+
 export async function addChatMessage(
   threadId: string | null,
   department: Department,

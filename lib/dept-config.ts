@@ -6,37 +6,37 @@ export const DEPT_CONFIG: Record<
 > = {
   engineering: {
     label: "Engineering",
-    color: "#0A84FF",
+    color: "#5b8fcc",
     icon: "code",
     emoji: "⌘",
   },
   marketing: {
     label: "Marketing",
-    color: "#FF9F0A",
+    color: "#c48742",
     icon: "megaphone",
     emoji: "✧",
   },
   finance: {
     label: "Finance",
-    color: "#32D74B",
+    color: "#4da066",
     icon: "dollar",
     emoji: "◎",
   },
   legal: {
     label: "Legal",
-    color: "#BF5AF2",
+    color: "#9a68c0",
     icon: "shield",
     emoji: "§",
   },
   product: {
     label: "Product",
-    color: "#FFD60A",
+    color: "#b09940",
     icon: "lightbulb",
     emoji: "❖",
   },
   management: {
     label: "Management",
-    color: "#FF375F",
+    color: "#b85870",
     icon: "users",
     emoji: "⬡",
   },
