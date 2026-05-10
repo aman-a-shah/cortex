@@ -49,6 +49,8 @@ interface VpAnim {
 interface Props {
   entries: ContextEntry[];
   onBubbleClick: (entry: ContextEntry) => void;
+  isManager?: boolean;
+  onMergeBubble?: (childId: string, parentId: string) => Promise<void>;
 }
 
 function polarityStatus(entry: ContextEntry): "pass" | "warning" | "fail" | "error" | null {
@@ -201,7 +203,7 @@ function wavyCirclePath(r: number, amplitude: number, phase: number, mouseAngle:
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
+export default function BubbleUniverse({ entries, onBubbleClick, isManager, onMergeBubble }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const rafRef       = useRef<number>(0);
@@ -214,6 +216,7 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
   const [viewport, setViewport]   = useState<Viewport>({ x: 0, y: 0, scale: 1 });
   const [focusedTags, setFocusedTags] = useState<string[]>([]);
   const [tagsLoading, setTagsLoading] = useState(false);
+  const [merging, setMerging] = useState(false);
 
   const tagsCacheRef = useRef<Map<string, string[]>>(new Map());
   const nodeMapRef   = useRef<Map<string, BubbleNode>>(new Map());
@@ -245,7 +248,12 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
   useEffect(() => {
     if (dims.w === 0 || entries.length === 0) return;
     const { w, h } = dims;
-    const visibleEntries = mergeSimilarEntries(entries);
+    // Only entries that haven't been manager-approved-merged into a parent are
+    // rendered as their own bubble. Approved children are visually absorbed.
+    const visibleEntries = entries.filter((e) => {
+      const meta = e.metadata ?? {};
+      return meta.mergeStatus !== "approved";
+    });
     const allTokens = visibleEntries.map(e => e.tokenCount);
     const existing  = nodeMapRef.current;
 
@@ -699,6 +707,7 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
                     style={{ animation: "ring-pulse 2s cubic-bezier(0.33,1,0.68,1) forwards", pointerEvents: "none" }} />
                 )}
 
+
                 {/* Focus ring */}
                 {isFocused && (
                   <circle r={node.r * 1.18} fill="none" stroke={node.color}
@@ -857,42 +866,84 @@ export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
       </svg>
 
       {/* Focused bubble — bottom summary caption */}
-      {focusedNode && (
-        <div
-          className="animate-detail-rise"
-          style={{
-            position: "absolute",
-            bottom: 90,
-            left: "50%",
-            transform: "translateX(-50%)",
-            maxWidth: 520,
-            width: "calc(100% - 48px)",
-            textAlign: "center",
-            pointerEvents: "none",
-            zIndex: 20,
-          }}
-        >
-          <p style={{
-            margin: 0,
-            fontSize: 13.5,
-            lineHeight: 1.7,
-            color: "var(--text-secondary)",
-            textShadow: "0 2px 16px rgba(0,0,0,0.9), 0 0 40px rgba(0,0,0,0.6)",
-          }}>
-            {focusedNode.entry.summary}
-          </p>
-          <p style={{
-            margin: "5px 0 0",
-            fontSize: 11,
-            color: "var(--text-muted)",
-            opacity: 0.55,
-            textShadow: "0 2px 8px rgba(0,0,0,0.8)",
-          }}>
-            {DEPT_CONFIG[focusedNode.dept].label} · {new Date(focusedNode.entry.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            {focusedNode.isSubBubble ? " · extracted from chat" : focusedNode.entry.source ? ` · ${focusedNode.entry.source}` : ""} · esc to close
-          </p>
-        </div>
-      )}
+      {focusedNode && (() => {
+        // Find the largest other bubble in the same dept to merge into
+        const mergeTarget = nodesRef.current
+          .filter(n => n.dept === focusedNode.dept && n.id !== focusedNode.id)
+          .sort((a, b) => b.r - a.r)[0] ?? null;
+        const canMerge = isManager && !!onMergeBubble && !!mergeTarget;
+        const cfg = DEPT_CONFIG[focusedNode.dept];
+
+        return (
+          <div
+            className="animate-detail-rise"
+            style={{
+              position: "absolute",
+              bottom: 90,
+              left: "50%",
+              transform: "translateX(-50%)",
+              maxWidth: 520,
+              width: "calc(100% - 48px)",
+              textAlign: "center",
+              pointerEvents: canMerge ? "auto" : "none",
+              zIndex: 20,
+            }}
+          >
+            <p style={{
+              margin: 0,
+              fontSize: 13.5,
+              lineHeight: 1.7,
+              color: "var(--text-secondary)",
+              textShadow: "0 2px 16px rgba(0,0,0,0.9), 0 0 40px rgba(0,0,0,0.6)",
+            }}>
+              {focusedNode.entry.summary}
+            </p>
+            <p style={{
+              margin: "5px 0 0",
+              fontSize: 11,
+              color: "var(--text-muted)",
+              opacity: 0.55,
+              textShadow: "0 2px 8px rgba(0,0,0,0.8)",
+            }}>
+              {cfg.label} · {new Date(focusedNode.entry.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              {focusedNode.isSubBubble ? " · extracted from chat" : focusedNode.entry.source ? ` · ${focusedNode.entry.source}` : ""} · esc to close
+            </p>
+
+            {canMerge && (
+              <button
+                disabled={merging}
+                onClick={async () => {
+                  setMerging(true);
+                  try {
+                    await onMergeBubble!(focusedNode.id, mergeTarget!.id);
+                    setFocusedId(null);
+                    vpAnimRef.current = { start: { ...viewportRef.current }, target: { x: 0, y: 0, scale: 1 }, startTime: -1, duration: 400 };
+                  } finally {
+                    setMerging(false);
+                  }
+                }}
+                style={{
+                  marginTop: 12,
+                  padding: "7px 18px",
+                  borderRadius: 999,
+                  background: merging ? "rgba(255,255,255,0.04)" : cfg.color + "22",
+                  border: `1px solid ${cfg.color}${merging ? "33" : "66"}`,
+                  color: merging ? "var(--text-muted)" : cfg.color,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: merging ? "default" : "pointer",
+                  letterSpacing: "0.04em",
+                  backdropFilter: "blur(8px)",
+                  transition: "all 0.2s ease",
+                  pointerEvents: "auto",
+                }}
+              >
+                {merging ? "Merging…" : `Merge into ${cfg.label} bubble`}
+              </button>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -12,14 +12,31 @@ import {
 import {
   safeCloudinaryError,
   transformCloudinaryImage,
+  generateAndUploadImage,
+  type CloudinaryTransformation,
 } from "@/lib/cloudinary";
-import { detectMediaTransformIntent } from "@/lib/media-transform-intent";
+import { detectMediaTransformIntent, detectGenerateIntent } from "@/lib/media-transform-intent";
 import { notifyDepartments, notifyContextChange } from "@/lib/pingram";
 import { fetchLiveToolContext } from "@/lib/composio";
 import { verifyToken, TOKEN_COOKIE } from "@/lib/auth";
 import { registerUser } from "@/lib/user-registry";
 import { logger } from "@/lib/logger";
 import type { Department, ContextEntry } from "@/types";
+
+function transformLabel(t: CloudinaryTransformation, opts?: Record<string, unknown>): string {
+  switch (t) {
+    case "background_replace":
+      return opts?.prompt ? `Placed on "${opts.prompt}"` : "Background replaced";
+    case "remove_background": return "Background removed";
+    case "generative_replace":
+      return opts?.from && opts?.to ? `Changed "${opts.from}" → "${opts.to}"` : "Object replaced";
+    case "enhance": return "Enhanced & restored";
+    case "blur": return "Blur applied";
+    case "grayscale": return "Converted to grayscale";
+    case "sharpen": return "Sharpened";
+    case "resize": return "Resized";
+  }
+}
 
 function textStream(text: string): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -70,34 +87,68 @@ export async function POST(req: NextRequest) {
     await addChatMessage(currentThreadId, dept, "user", lastUserMessage.content);
   }
 
-  const mediaTransformIntent = detectMediaTransformIntent(lastUserContent);
+  // If the current message has no Cloudinary URL, inject the most recent one from
+  // conversation history so "put this car on a racetrack" works as a follow-up.
+  const CLOUDINARY_URL_RE = /https:\/\/res\.cloudinary\.com\/[^\s)\]]+\/image\/upload\/[^\s)\]]+/i;
+  function findLastCloudinaryUrl(msgs: { role: string; content: string }[]): string | null {
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i].content.match(CLOUDINARY_URL_RE);
+      if (m) return m[0].replace(/[)\].,;:]+$/, "");
+    }
+    return null;
+  }
+  const contentForDetection = CLOUDINARY_URL_RE.test(lastUserContent)
+    ? lastUserContent
+    : (() => {
+        const historyUrl = findLastCloudinaryUrl(messages);
+        return historyUrl
+          ? `${lastUserContent}\n[Attached image: ${historyUrl}]`
+          : lastUserContent;
+      })();
+
+  const mediaTransformIntent = detectMediaTransformIntent(contentForDetection);
   if (mediaTransformIntent) {
     let assistantContent: string;
-
     try {
       const result = await transformCloudinaryImage(
         mediaTransformIntent.imageUrl,
         mediaTransformIntent.transformation,
         mediaTransformIntent.options
       );
-
-      console.log(
-        `[cloudinary:chat-transform] originalImageUrl=${mediaTransformIntent.imageUrl} detectedCloudName=${result.detectedCloudName} publicId=${result.originalPublicId} transformation=${mediaTransformIntent.transformation} finalTransformedUrl=${result.url}`
-      );
-
-      assistantContent = result.url;
+      logger.info("chat", `transform: ${mediaTransformIntent.transformation} → ${result.url}`);
+      const label = transformLabel(mediaTransformIntent.transformation, mediaTransformIntent.options);
+      assistantContent = `![${label}](${result.url})\n✨ ${label} via Cloudinary AI.`;
     } catch (err) {
       assistantContent = `Cloudinary transformation failed: ${safeCloudinaryError(err)}`;
     }
-
     await addChatMessage(currentThreadId, dept, "assistant", assistantContent);
-
     return new Response(textStream(assistantContent), {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-cache",
         "X-Cortex-Thread-Id": currentThreadId,
         "X-Cortex-Media-Transform": mediaTransformIntent.transformation,
+      },
+    });
+  }
+
+  const generateIntent = detectGenerateIntent(lastUserContent);
+  if (generateIntent) {
+    let assistantContent: string;
+    try {
+      const url = await generateAndUploadImage(generateIntent.prompt);
+      logger.info("chat", `generate image: "${generateIntent.prompt}"`);
+      assistantContent = `![Generated: ${generateIntent.prompt}](${url})\n🎨 Generated an image of **${generateIntent.prompt}** via Cloudinary AI.`;
+    } catch (err) {
+      assistantContent = `Image generation failed: ${safeCloudinaryError(err)}`;
+    }
+    await addChatMessage(currentThreadId, dept, "assistant", assistantContent);
+    return new Response(textStream(assistantContent), {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "X-Cortex-Thread-Id": currentThreadId,
+        "X-Cortex-Media-Generate": "1",
       },
     });
   }

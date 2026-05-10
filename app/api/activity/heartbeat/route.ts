@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ ok: false }, { status: 401 });
 
   if (session.email) {
-    recordHeartbeat(session.userId, session.email, session.name);
+    recordHeartbeat(session.userId, session.email, session.name, session.department);
   }
 
   return NextResponse.json({ ok: true });

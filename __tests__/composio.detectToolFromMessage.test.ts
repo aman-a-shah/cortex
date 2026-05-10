@@ -18,8 +18,8 @@ describe("detectToolFromMessage", () => {
     expect(detectToolFromMessage("Update the wiki runbook please")).toBe("notion");
   });
 
-  it("detects drive from google doc mention", () => {
-    expect(detectToolFromMessage("The shared doc in Google Drive has the spec")).toBe("drive");
+  it("returns null for drive mention (drive tool removed)", () => {
+    expect(detectToolFromMessage("The shared doc in Google Drive has the spec")).toBeNull();
   });
 
   it("returns null for unrelated message", () => {

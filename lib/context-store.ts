@@ -19,11 +19,8 @@ interface ContextRow {
   token_count: number | null;
   backboard_synced_at: string | null;
   backboard_sync_error: string | null;
-<<<<<<< HEAD
   created_by: string | null;
-=======
   metadata?: Record<string, unknown> | null;
->>>>>>> 4bb561209135c2baebc0794bba7497e6a8b70e2f
 }
 
 function mapContextRow(row: ContextRow): ContextEntry {
@@ -40,12 +37,9 @@ function mapContextRow(row: ContextRow): ContextEntry {
     tokenCount: row.token_count ?? Math.ceil(row.text.length / 4),
     backboardSyncedAt: row.backboard_synced_at ?? undefined,
     backboardSyncError: row.backboard_sync_error ?? undefined,
-<<<<<<< HEAD
     createdByUserId,
     createdByName: createdByUserId ? (getUserName(createdByUserId) ?? undefined) : undefined,
-=======
     metadata: row.metadata ?? undefined,
->>>>>>> 4bb561209135c2baebc0794bba7497e6a8b70e2f
   };
 }
 
@@ -55,7 +49,7 @@ export async function getContextEntries(): Promise<ContextEntry[]> {
       const { data, error } = await getSupabaseAdmin()
         .from("context_entries")
         .select(
-          "id,department_id,text,summary,media_url,media_public_id,source,created_at,token_count,backboard_synced_at,backboard_sync_error,created_by"
+          "id,department_id,text,summary,media_url,media_public_id,source,created_at,token_count,backboard_synced_at,backboard_sync_error,created_by,metadata"
         )
         .order("created_at", { ascending: false });
 
@@ -89,6 +83,45 @@ export async function getCrossDepContext(
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
     .slice(0, CROSS_DEPT_SLICE);
+}
+
+export async function updateContextEntryMetadata(
+  id: string,
+  partial: Record<string, unknown>
+): Promise<ContextEntry | null> {
+  if (isSupabaseConfigured()) {
+    try {
+      const existing = await getSupabaseAdmin()
+        .from("context_entries")
+        .select(
+          "id,department_id,text,summary,media_url,media_public_id,source,created_at,token_count,backboard_synced_at,backboard_sync_error,created_by,metadata"
+        )
+        .eq("id", id)
+        .maybeSingle();
+      if (existing.error) throw existing.error;
+      if (!existing.data) return null;
+      const merged = { ...((existing.data.metadata as Record<string, unknown> | null) ?? {}), ...partial };
+      const upd = await getSupabaseAdmin()
+        .from("context_entries")
+        .update({ metadata: merged })
+        .eq("id", id)
+        .select(
+          "id,department_id,text,summary,media_url,media_public_id,source,created_at,token_count,backboard_synced_at,backboard_sync_error,created_by,metadata"
+        )
+        .maybeSingle();
+      if (upd.error) throw upd.error;
+      return upd.data ? mapContextRow(upd.data as ContextRow) : null;
+    } catch (error) {
+      logger.error("context-store", "metadata update failed", error);
+      return null;
+    }
+  }
+
+  const idx = store.findIndex((e) => e.id === id);
+  if (idx === -1) return null;
+  const merged = { ...(store[idx].metadata ?? {}), ...partial };
+  store[idx] = { ...store[idx], metadata: merged };
+  return store[idx];
 }
 
 export async function deleteContextEntries(ids: string[]): Promise<void> {

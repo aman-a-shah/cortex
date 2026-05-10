@@ -55,21 +55,79 @@ function exportAsPdf(text: string) {
   setTimeout(() => { win.focus(); win.print(); }, 350);
 }
 
+// ─── Image rendering ──────────────────────────────────────────────────────────
+
+const MARKDOWN_IMAGE_RE = /!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
+const ATTACHED_IMAGE_RE = /\[Attached image: (https?:\/\/[^\]]+)\]/g;
+
+function ImageBlock({ url, alt, maxWidth = 400 }: { url: string; alt?: string; maxWidth?: number }) {
+  const [state, setState] = useState<"loading" | "loaded" | "error">("loading");
+  return (
+    <div style={{ margin: "6px 0", maxWidth, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface-2)" }}>
+      {state === "loading" && (
+        <div style={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.06em" }}>Loading image…</span>
+        </div>
+      )}
+      {state === "error" && (
+        <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <span style={{ fontSize: 18, opacity: 0.4 }}>🖼</span>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Image unavailable</span>
+        </div>
+      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt={alt ?? "image"}
+        onLoad={() => setState("loaded")}
+        onError={() => setState("error")}
+        style={{
+          display: state === "loaded" ? "block" : "none",
+          width: "100%",
+          maxWidth,
+          borderRadius: 10,
+          objectFit: "cover",
+        }}
+      />
+    </div>
+  );
+}
+
+// Extract [Attached image: URL] markers from user message text.
+// Returns { images: string[], cleanText: string }
+function extractAttachedImages(content: string): { images: string[]; cleanText: string } {
+  const images: string[] = [];
+  const cleanText = content.replace(ATTACHED_IMAGE_RE, (_, url) => {
+    images.push(url);
+    return "";
+  }).trim();
+  return { images, cleanText };
+}
+
 // ─── Markdown renderer ────────────────────────────────────────────────────────
 
-type Segment = { type: "code"; lang: string; code: string } | { type: "text"; content: string };
+type Segment = { type: "code"; lang: string; code: string } | { type: "image"; url: string; alt: string } | { type: "text"; content: string };
 
-function splitCodeBlocks(raw: string): Segment[] {
+function splitSegments(raw: string): Segment[] {
   const segments: Segment[] = [];
-  const re = /```(\w*)\n?([\s\S]*?)```/g;
+  // Match both code blocks and markdown images
+  const re = /```(\w*)\n?([\s\S]*?)```|!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
   let last = 0, match;
   while ((match = re.exec(raw)) !== null) {
     if (match.index > last) segments.push({ type: "text", content: raw.slice(last, match.index) });
-    segments.push({ type: "code", lang: match[1] || "", code: match[2] });
+    if (match[0].startsWith("```")) {
+      segments.push({ type: "code", lang: match[1] || "", code: match[2] });
+    } else {
+      segments.push({ type: "image", url: match[4], alt: match[3] || "image" });
+    }
     last = match.index + match[0].length;
   }
   if (last < raw.length) segments.push({ type: "text", content: raw.slice(last) });
   return segments;
+}
+
+function splitCodeBlocks(raw: string): Segment[] {
+  return splitSegments(raw);
 }
 
 function codeBlocks(raw: string): { lang: string; code: string }[] {
@@ -240,14 +298,14 @@ function TextSegment({ content, accentColor }: { content: string; accentColor: s
 }
 
 function MarkdownContent({ text, accentColor }: { text: string; accentColor: string }) {
-  const segments = splitCodeBlocks(text);
+  const segments = splitSegments(text);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-      {segments.map((seg, i) =>
-        seg.type === "code"
-          ? <CodeBlock key={i} lang={seg.lang} code={seg.code} />
-          : <TextSegment key={i} content={seg.content} accentColor={accentColor} />
-      )}
+      {segments.map((seg, i) => {
+        if (seg.type === "code") return <CodeBlock key={i} lang={seg.lang} code={seg.code} />;
+        if (seg.type === "image") return <ImageBlock key={i} url={seg.url} alt={seg.alt} maxWidth={480} />;
+        return <TextSegment key={i} content={seg.content} accentColor={accentColor} />;
+      })}
     </div>
   );
 }
@@ -347,16 +405,11 @@ interface Props {
 }
 
 export default function MessageList({ messages, streaming, streamContent, department, userName }: Props) {
-<<<<<<< HEAD
   const cfg          = DEPT_CONFIG[department];
   const bottomRef    = useRef<HTMLDivElement>(null);
   const scrollerRef  = useRef<HTMLDivElement>(null);
-=======
-  const cfg       = DEPT_CONFIG[department];
-  const bottomRef = useRef<HTMLDivElement>(null);
   const [scanResults, setScanResults] = useState<Record<string, PolarityScanResult>>({});
   const [scanLoading, setScanLoading] = useState<Record<string, boolean>>({});
->>>>>>> 4bb561209135c2baebc0794bba7497e6a8b70e2f
 
   useEffect(() => {
     const el = scrollerRef.current;
@@ -483,10 +536,21 @@ export default function MessageList({ messages, streaming, streamContent, depart
                         </div>
                       )}
                       <div style={{ padding: isUser ? "9px 15px" : "12px 16px" }}>
-                        {isUser
-                          ? <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, wordBreak: "break-word", overflowWrap: "break-word" }}>{msg.content}</p>
-                          : <MarkdownContent text={msg.content} accentColor={cfg.color} />
-                        }
+                        {isUser ? (() => {
+                          const { images, cleanText } = extractAttachedImages(msg.content);
+                          return (
+                            <>
+                              {cleanText && (
+                                <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, wordBreak: "break-word", overflowWrap: "break-word" }}>
+                                  {cleanText}
+                                </p>
+                              )}
+                              {images.map((url, i) => (
+                                <ImageBlock key={i} url={url} alt="attached image" maxWidth={320} />
+                              ))}
+                            </>
+                          );
+                        })() : <MarkdownContent text={msg.content} accentColor={cfg.color} />}
                       </div>
                     </div>
                   );

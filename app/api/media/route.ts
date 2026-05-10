@@ -6,6 +6,7 @@ import {
   uploadContextMedia,
   type CloudinaryInputKind,
 } from "@/lib/cloudinary";
+import { logger } from "@/lib/logger";
 
 type MediaUploadPayload = {
   imageInput: string | Buffer;
@@ -20,12 +21,8 @@ const RAW_BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
 function classifyStringInput(value: string): CloudinaryInputKind {
   const input = value.trim();
-
   if (input.startsWith("data:image/")) return "data URI";
-  if (input.length > 0 && input.length % 4 === 0 && RAW_BASE64_RE.test(input)) {
-    return "raw base64";
-  }
-
+  if (input.length > 0 && input.length % 4 === 0 && RAW_BASE64_RE.test(input)) return "raw base64";
   return "file path";
 }
 
@@ -89,34 +86,21 @@ export async function POST(req: NextRequest) {
   try {
     payload = await parsePayload(req);
   } catch (err) {
-    console.error("[cloudinary] failed to parse upload request", safeCloudinaryError(err));
-    return NextResponse.json(
-      { success: false, error: "invalid upload request" },
-      { status: 400 }
-    );
+    logger.error("media", "failed to parse upload request", safeCloudinaryError(err));
+    return NextResponse.json({ success: false, error: "invalid upload request" }, { status: 400 });
   }
 
   const { imageInput, inputKind, department, contextId, type, productName } = payload;
 
   if (!imageInput) {
-    return NextResponse.json(
-      { success: false, error: "image input required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ success: false, error: "image input required" }, { status: 400 });
   }
 
-<<<<<<< HEAD
-  if (type === "aucctus" && productName) {
-    const result = await uploadAucctusVisual(base64Data, productName);
-    if ("error" in result) return NextResponse.json(result, { status: 500 });
-    return NextResponse.json(result);
-=======
   try {
-    console.log(`[cloudinary] uploading image input kind: ${inputKind}`);
+    logger.info("media", `uploading image input kind: ${inputKind}`);
 
     if (type === "aucctus" && productName) {
       const result = await uploadAucctusVisual(imageInput, productName);
-      console.log(`[cloudinary] upload complete from ${result.inputKind}`);
       return NextResponse.json(toCleanCloudinaryResponse(result));
     }
 
@@ -128,25 +112,9 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await uploadContextMedia(imageInput, department, contextId);
-    console.log(`[cloudinary] upload complete from ${result.inputKind}`);
     return NextResponse.json(toCleanCloudinaryResponse(result));
   } catch (err) {
-    console.error(
-      `[cloudinary] upload failed for input kind: ${inputKind}`,
-      safeCloudinaryError(err)
-    );
-    return NextResponse.json(
-      { success: false, error: "upload failed" },
-      { status: 500 }
-    );
->>>>>>> 4bb561209135c2baebc0794bba7497e6a8b70e2f
+    logger.error("media", `upload failed for input kind: ${inputKind}`, safeCloudinaryError(err));
+    return NextResponse.json({ success: false, error: "upload failed" }, { status: 500 });
   }
-
-  if (!department || !contextId) {
-    return NextResponse.json({ error: "department and contextId required" }, { status: 400 });
-  }
-
-  const result = await uploadContextMedia(base64Data, department, contextId);
-  if ("error" in result) return NextResponse.json(result, { status: 500 });
-  return NextResponse.json(result);
 }

@@ -36,6 +36,43 @@ function isBackboardConfigured(): boolean {
   return Boolean(BACKBOARD_API_KEY);
 }
 
+// ─── Multimodal message conversion ───────────────────────────────────────────
+
+const ATTACHED_IMAGE_RE = /\[Attached image: (https?:\/\/[^\]]+)\]/g;
+
+type AnthropicContent =
+  | { type: "text"; text: string }
+  | { type: "image"; source: { type: "url"; url: string } };
+
+type AnthropicMessage = {
+  role: "user" | "assistant";
+  content: string | AnthropicContent[];
+};
+
+function toMultimodalMessages(
+  messages: { role: "user" | "assistant"; content: string }[]
+): AnthropicMessage[] {
+  return messages.map((msg) => {
+    if (msg.role !== "user") return msg;
+    const urls: string[] = [];
+    const text = msg.content.replace(ATTACHED_IMAGE_RE, (_, url) => {
+      urls.push(url);
+      return "";
+    }).trim();
+    if (urls.length === 0) return msg;
+    return {
+      role: "user" as const,
+      content: [
+        ...(text ? [{ type: "text" as const, text }] : []),
+        ...urls.map((url) => ({
+          type: "image" as const,
+          source: { type: "url" as const, url },
+        })),
+      ],
+    };
+  });
+}
+
 function buildSystemPrompt(
   department: Department,
   crossDeptContext: ContextEntry[],
@@ -66,7 +103,22 @@ function buildSystemPrompt(
 
 You are connected to a shared company memory. Use the latest cross-department context when it affects your answer. If design, finance, legal, marketing, product, management, or engineering has established a constraint, preference, decision, plan, budget, policy, or goal, follow it without requiring the user to restate it.
 
-Be concise and actionable. When useful, mention which department context influenced your answer.${contextBlock}${peerBlock}`;
+Be concise and actionable. When useful, mention which department context influenced your answer.
+
+IMAGE CAPABILITIES: You can see any images the user attaches — analyze, describe, and answer questions about them in detail.
+
+CRITICAL — image operations work as follows:
+- The server intercepts certain requests BEFORE they reach you and runs Cloudinary transformations automatically. When that happens, the transformed image URL is already embedded in this message as markdown — reference it naturally and describe what was done.
+- NEVER fabricate, guess, or generate image URLs or markdown image syntax (![alt](url)) yourself. You do not have the ability to produce real image URLs. Any URL you invent will be broken.
+- If the user asks for an image operation and NO image result appears in this message, tell them exactly what phrasing to use so the server picks it up — e.g. "Try: put this car on a sunset racetrack" or "Try: blur this image".
+
+Supported operations (server-triggered, not LLM-generated):
+- Blur / grayscale / sharpen / resize
+- Background replacement: "put this on a [scene]", "place in a [environment]", "set against a [backdrop]", "make a poster of this on a [scene]", "transform into a cinematic [setting]"
+- Background removal: "remove the background", "cut it out"
+- Element replace: "change the [part] to [new]", "make it [color/style]"
+- Enhance: "enhance this", "restore quality"
+- Generate new image: "generate an image of [subject]", "create a picture of [subject]"${contextBlock}${peerBlock}`;
 }
 
 const STOP_WORDS = new Set([
@@ -310,11 +362,13 @@ async function anthropicStream(
   messages: { role: "user" | "assistant"; content: string }[],
   system: string
 ): Promise<ReadableStream<Uint8Array>> {
+  const multimodal = toMultimodalMessages(messages);
+  const hasImages = multimodal.some((m) => Array.isArray(m.content));
   const stream = await anthropic.messages.stream({
     model: "claude-sonnet-4-6",
-    max_tokens: 1024,
+    max_tokens: hasImages ? 2048 : 1024,
     system,
-    messages,
+    messages: multimodal as Parameters<typeof anthropic.messages.stream>[0]["messages"],
   });
 
   const encoder = new TextEncoder();

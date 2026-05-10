@@ -10,6 +10,7 @@ import type { Department } from "@/types";
 
 const ChatMode = dynamic(() => import("@/components/ChatMode"), { ssr: false });
 const ContextMode = dynamic(() => import("@/components/ContextMode"), { ssr: false });
+const ContextChangeToast = dynamic(() => import("@/components/ContextChangeToast"), { ssr: false });
 
 type Mode = "chat" | "context";
 type AppState = "loading" | "login" | "ready" | "transitioning";
@@ -122,7 +123,7 @@ export default function Home() {
               zIndex: 1,
             }}
           >
-            <ContextMode />
+            <ContextMode session={session} />
           </div>
 
           {/* Chat mode on top */}
@@ -143,6 +144,11 @@ export default function Home() {
       {/* Mode toggle */}
       {(appState === "ready" || appState === "transitioning") && session && (
         <ModeToggle mode={mode} onToggle={handleToggle} />
+      )}
+
+      {/* Context-change toast — surfaces cross-dept and external (MCP/Composio) updates */}
+      {(appState === "ready" || appState === "transitioning") && session && (
+        <ContextChangeToast ownDepartment={session.department} />
       )}
 
     </div>

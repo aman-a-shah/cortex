@@ -67,3 +67,84 @@ export async function warmSecretCache(): Promise<void> {
     (Object.keys(SECRET_IDS) as (keyof typeof SECRET_IDS)[]).map(getSecret)
   );
 }
+
+// ---------------------------------------------------------------------------
+// Secret scanning (content)
+// ---------------------------------------------------------------------------
+// Cystack-powered secret scan for inbound context entries. If a remote scan
+// endpoint is configured we delegate to it; otherwise we fall back to a local
+// regex pack so the demo works offline. Always fail-open — never block writes.
+
+const CYSTACK_SCAN_URL = process.env.CYSTACK_SCAN_URL ?? "";
+const CYSTACK_SCAN_TOKEN = process.env.CYSTACK_SCAN_TOKEN ?? "";
+
+interface SecretPattern {
+  type: string;
+  pattern: RegExp;
+}
+
+const SECRET_PATTERNS: SecretPattern[] = [
+  { type: "aws_access_key", pattern: /\bAKIA[0-9A-Z]{16}\b/g },
+  { type: "github_token", pattern: /\bghp_[A-Za-z0-9]{30,}\b/g },
+  { type: "github_oauth", pattern: /\bgho_[A-Za-z0-9]{30,}\b/g },
+  { type: "stripe_live_key", pattern: /\bsk_live_[A-Za-z0-9]{20,}\b/g },
+  { type: "openai_key", pattern: /\bsk-[A-Za-z0-9_-]{20,}\b/g },
+  { type: "anthropic_key", pattern: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g },
+  { type: "google_api_key", pattern: /\bAIza[0-9A-Za-z_-]{35}\b/g },
+  { type: "slack_token", pattern: /\bxox[abprs]-[0-9A-Za-z-]{10,}\b/g },
+  { type: "bearer_token", pattern: /\bBearer\s+[A-Za-z0-9._\-]{20,}\b/g },
+  { type: "jwt", pattern: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
+  { type: "private_key", pattern: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |)PRIVATE KEY-----[\s\S]+?-----END (?:RSA |EC |DSA |OPENSSH |)PRIVATE KEY-----/g },
+];
+
+export interface SecretScanResult {
+  cleaned: string;
+  redactionsCount: number;
+  redactionTypes: string[];
+}
+
+function localScan(text: string): SecretScanResult {
+  let cleaned = text;
+  const types = new Set<string>();
+  let total = 0;
+  for (const { type, pattern } of SECRET_PATTERNS) {
+    cleaned = cleaned.replace(pattern, () => {
+      total += 1;
+      types.add(type);
+      return `[REDACTED:${type}]`;
+    });
+  }
+  return { cleaned, redactionsCount: total, redactionTypes: [...types] };
+}
+
+export async function scanForSecrets(text: string): Promise<SecretScanResult> {
+  if (!text) return { cleaned: text, redactionsCount: 0, redactionTypes: [] };
+
+  if (CYSTACK_SCAN_URL) {
+    try {
+      const res = await fetch(CYSTACK_SCAN_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(CYSTACK_SCAN_TOKEN ? { Authorization: `Bearer ${CYSTACK_SCAN_TOKEN}` } : {}),
+        },
+        body: JSON.stringify({ text }),
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = (await res.json()) as Partial<SecretScanResult>;
+        if (typeof data.cleaned === "string") {
+          return {
+            cleaned: data.cleaned,
+            redactionsCount: data.redactionsCount ?? 0,
+            redactionTypes: data.redactionTypes ?? [],
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("[cystack] remote scan failed, falling back to local", err);
+    }
+  }
+
+  return localScan(text);
+}

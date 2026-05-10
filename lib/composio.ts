@@ -1,10 +1,6 @@
 import { Composio } from "@composio/core";
-<<<<<<< HEAD
-import { COMPOSIO_TIMEOUT_MS } from "@/lib/constants";
-import { logger } from "@/lib/logger";
-=======
 import Anthropic from "@anthropic-ai/sdk";
->>>>>>> 4bb561209135c2baebc0794bba7497e6a8b70e2f
+import { COMPOSIO_TIMEOUT_MS } from "@/lib/constants";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -329,61 +325,6 @@ export function toolResultToContextText(
   return { summary, text };
 }
 
-<<<<<<< HEAD
-// ─── Email notifications ──────────────────────────────────────────────────────
-
-export async function sendContextChangeEmail(opts: {
-  to: string;
-  senderName: string;
-  department: string;
-  summary: string;
-  source: string;
-}): Promise<void> {
-  const composio = getComposio();
-  const entityId = process.env.COMPOSIO_ENTITY_ID ?? "default";
-  const { to, senderName, department, summary, source } = opts;
-
-  const date = new Date().toLocaleString("en-US", {
-    weekday: "long", year: "numeric", month: "long", day: "numeric",
-    hour: "2-digit", minute: "2-digit", timeZoneName: "short",
-  });
-
-  const body = `Dear ${senderName},
-
-This is an automated notification from Cortex, your cross-department intelligence platform.
-
-A new context update has been recorded in your workspace. The details are as follows:
-
-  Department:  ${department.charAt(0).toUpperCase() + department.slice(1)}
-  Source:      ${source}
-  Recorded:    ${date}
-
-Summary of change:
-${summary}
-
-This notification was sent because you opted in to live context alerts during sign-in. No action is required on your part.
-
----
-Cortex · Cross-Department Intelligence
-This is an automated message. Please do not reply directly to this email.`;
-
-  try {
-    await composio.tools.execute("GMAIL_SEND_EMAIL", {
-      userId: entityId,
-      arguments: {
-        recipient_email: to,
-        subject: `Cortex: New context update — ${department}`,
-        body,
-      },
-      dangerouslySkipVersionCheck: true,
-    });
-  } catch (err) {
-    logger.error("composio", "email notification failed", err instanceof Error ? err.message : err);
-  }
-}
-
-=======
->>>>>>> 4bb561209135c2baebc0794bba7497e6a8b70e2f
 // Attempt to fetch live tool context for a message, with a hard timeout.
 // Returns the tool result or null if not relevant, too slow, or not connected.
 export async function fetchLiveToolContext(
@@ -416,10 +357,6 @@ export async function fetchLiveToolContext(
     return { toolId, ...ctx };
   });
 
-<<<<<<< HEAD
-  const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), COMPOSIO_TIMEOUT_MS));
-=======
-  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
->>>>>>> 4bb561209135c2baebc0794bba7497e6a8b70e2f
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), COMPOSIO_TIMEOUT_MS));
   return Promise.race([toolPromise, timeout]);
 }

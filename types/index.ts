@@ -18,12 +18,9 @@ export interface ContextEntry {
   tokenCount: number;
   backboardSyncedAt?: string;
   backboardSyncError?: string;
-<<<<<<< HEAD
   createdByUserId?: string;
   createdByName?: string;
-=======
   metadata?: Record<string, unknown>;
->>>>>>> 4bb561209135c2baebc0794bba7497e6a8b70e2f
 }
 
 export interface ChatMessage {

@@ -1,19 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import BubbleUniverse from "./BubbleUniverse";
 import LiveFeed from "./LiveFeed";
 import ContextDetail from "./ContextDetail";
 import { useContextStore } from "@/hooks/useContextStore";
-import type { ContextEntry } from "@/types";
+import type { ContextEntry, Department } from "@/types";
 import { DEPT_CONFIG } from "@/lib/dept-config";
 
-export default function ContextMode() {
+interface ContextModeProps {
+  session?: { department: Department; name: string } | null;
+}
+
+export default function ContextMode({ session }: ContextModeProps = {}) {
   const { entries, latest, refresh } = useContextStore(2000);
   const [selected, setSelected] = useState<ContextEntry | null>(null);
   const [deleteQuery, setDeleteQuery] = useState("");
   const [deleteMatches, setDeleteMatches] = useState<ContextEntry[] | null>(null);
   const [searching, setSearching] = useState(false);
+
+  const isManager = session?.department === "management";
+
+  const handleMergeBubble = useCallback(async (childId: string, parentId: string) => {
+    await fetch("/api/merge-candidates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ parentId, childId, action: "approve" }),
+    });
+    await refresh();
+  }, [refresh]);
 
   async function findMatches(query: string): Promise<ContextEntry[]> {
     const q = query.toLowerCase().trim();
@@ -122,7 +137,12 @@ export default function ContextMode() {
           </div>
         </div>
 
-        <BubbleUniverse entries={entries} onBubbleClick={setSelected} />
+        <BubbleUniverse
+          entries={entries}
+          onBubbleClick={setSelected}
+          isManager={isManager}
+          onMergeBubble={isManager ? handleMergeBubble : undefined}
+        />
 
         {/* Delete context input bar */}
         <div

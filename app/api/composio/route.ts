@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { executeTool, formatToolResult, toolResultToContextText, TOOL_MAP } from "@/lib/composio";
 import { createConnectLink, executeTool, formatToolResult, hasActiveConnection, toolResultToContextText, TOOL_MAP } from "@/lib/composio";
 import { addContextEntry } from "@/lib/context-store";
 import { notifyContextChange } from "@/lib/pingram";
