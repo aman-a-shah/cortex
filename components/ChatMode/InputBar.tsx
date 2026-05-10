@@ -86,7 +86,7 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
     const preview = URL.createObjectURL(file);
     const reader = new FileReader();
     reader.onload = async () => {
-      const base64Data = (reader.result as string).split(",")[1];
+      const base64Data = reader.result as string;
       try {
         const res = await fetch("/api/media", {
           method: "POST",

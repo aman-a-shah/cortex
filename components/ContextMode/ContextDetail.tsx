@@ -9,8 +9,32 @@ interface Props {
   onClose: () => void;
 }
 
+function polarityStatus(entry: ContextEntry): "pass" | "warning" | "fail" | "error" | null {
+  const metaStatus = entry.metadata?.status;
+  if (
+    metaStatus === "pass" ||
+    metaStatus === "warning" ||
+    metaStatus === "fail" ||
+    metaStatus === "error"
+  ) {
+    return metaStatus;
+  }
+
+  if (entry.source !== "ai-generated-code") return null;
+  const match = entry.summary.match(/\b(pass|warning|fail|error)\b/i);
+  return match ? (match[1].toLowerCase() as "pass" | "warning" | "fail" | "error") : "error";
+}
+
+const POLARITY_STATUS_COLOR = {
+  pass: "#3ecf8e",
+  warning: "#f2b84b",
+  fail: "#ff6b6b",
+  error: "#9ca3af",
+} as const;
+
 export default function ContextDetail({ entry, onClose }: Props) {
   const cfg = DEPT_CONFIG[entry.department];
+  const scanStatus = polarityStatus(entry);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -74,6 +98,22 @@ export default function ContextDetail({ entry, onClose }: Props) {
               {entry.source ? ` · ${entry.source}` : ""}
             </div>
           </div>
+          {scanStatus && (
+            <span
+              style={{
+                fontSize: 11,
+                padding: "3px 9px",
+                borderRadius: 999,
+                background: POLARITY_STATUS_COLOR[scanStatus] + "22",
+                color: POLARITY_STATUS_COLOR[scanStatus],
+                border: `1px solid ${POLARITY_STATUS_COLOR[scanStatus]}55`,
+                textTransform: "uppercase",
+                fontWeight: 600,
+              }}
+            >
+              Polarity {scanStatus}
+            </span>
+          )}
           <button
             onClick={onClose}
             style={{

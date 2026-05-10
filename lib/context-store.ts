@@ -16,6 +16,7 @@ interface ContextRow {
   token_count: number | null;
   backboard_synced_at: string | null;
   backboard_sync_error: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 function mapContextRow(row: ContextRow): ContextEntry {
@@ -31,6 +32,7 @@ function mapContextRow(row: ContextRow): ContextEntry {
     tokenCount: row.token_count ?? Math.ceil(row.text.length / 4),
     backboardSyncedAt: row.backboard_synced_at ?? undefined,
     backboardSyncError: row.backboard_sync_error ?? undefined,
+    metadata: row.metadata ?? undefined,
   };
 }
 
@@ -117,25 +119,49 @@ export async function addContextEntry(
 ): Promise<ContextEntry> {
   if (isSupabaseConfigured()) {
     try {
-      const { data, error } = await getSupabaseAdmin()
+      const payload = {
+        department_id: entry.department,
+        created_by: createdBy,
+        text: entry.text,
+        summary: entry.summary,
+        media_url: entry.mediaUrl,
+        media_public_id: entry.mediaPublicId,
+        source: entry.source,
+        token_count: entry.tokenCount,
+        metadata: entry.metadata,
+      };
+
+      let result = await getSupabaseAdmin()
         .from("context_entries")
-        .insert({
-          department_id: entry.department,
-          created_by: createdBy,
-          text: entry.text,
-          summary: entry.summary,
-          media_url: entry.mediaUrl,
-          media_public_id: entry.mediaPublicId,
-          source: entry.source,
-          token_count: entry.tokenCount,
-        })
+        .insert(payload)
         .select(
           "id,department_id,text,summary,media_url,media_public_id,source,created_at,token_count,backboard_synced_at,backboard_sync_error"
         )
         .single();
 
+      if (result.error && /metadata/i.test(result.error.message)) {
+        const payloadWithoutMetadata = {
+          department_id: payload.department_id,
+          created_by: payload.created_by,
+          text: payload.text,
+          summary: payload.summary,
+          media_url: payload.media_url,
+          media_public_id: payload.media_public_id,
+          source: payload.source,
+          token_count: payload.token_count,
+        };
+        result = await getSupabaseAdmin()
+          .from("context_entries")
+          .insert(payloadWithoutMetadata)
+          .select(
+            "id,department_id,text,summary,media_url,media_public_id,source,created_at,token_count,backboard_synced_at,backboard_sync_error"
+          )
+          .single();
+      }
+
+      const { data, error } = result;
       if (error) throw error;
-      const created = mapContextRow(data as ContextRow);
+      const created = { ...mapContextRow(data as ContextRow), metadata: entry.metadata };
       try {
         await syncContextToBackboard(created);
       } catch (syncError) {
