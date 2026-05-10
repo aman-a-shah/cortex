@@ -8,6 +8,10 @@ import {
   addChatMessage,
   createConversation,
 } from "@/lib/chat-store";
+import {
+  safeCloudinaryError,
+  transformCloudinaryImage,
+} from "@/lib/cloudinary";
 import { detectMediaTransformIntent } from "@/lib/media-transform-intent";
 import { notifyDepartments, notifyContextChange } from "@/lib/pingram";
 import { fetchLiveToolContext } from "@/lib/composio";
