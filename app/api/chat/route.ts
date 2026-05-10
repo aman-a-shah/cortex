@@ -10,8 +10,24 @@ import {
 } from "@/lib/chat-store";
 import { notifyDepartments } from "@/lib/pingram";
 import { fetchLiveToolContext, sendContextChangeEmail } from "@/lib/composio";
+import {
+  safeCloudinaryError,
+  transformCloudinaryImage,
+} from "@/lib/cloudinary";
+import { detectMediaTransformIntent } from "@/lib/media-transform-intent";
 import { verifyToken, TOKEN_COOKIE } from "@/lib/auth";
 import type { Department, ContextEntry } from "@/types";
+
+function textStream(text: string): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(text));
+      controller.close();
+    },
+  });
+}
 
 export async function POST(req: NextRequest) {
   const token = req.cookies.get(TOKEN_COOKIE)?.value;
@@ -31,6 +47,51 @@ export async function POST(req: NextRequest) {
   // Auto-enrich context with live tool data if the message references a connected tool.
   // Runs in parallel with other setup; 2.5s timeout so it never blocks the response.
   const lastUserContent = lastUserMessage?.content ?? "";
+
+  const currentThreadId =
+    threadId ??
+    (await createConversation(
+      session.userId,
+      dept,
+      lastUserMessage?.content?.slice(0, 52) ?? "Conversation"
+    ));
+
+  if (lastUserMessage) {
+    await addChatMessage(currentThreadId, dept, "user", lastUserMessage.content);
+  }
+
+  const mediaTransformIntent = detectMediaTransformIntent(lastUserContent);
+  if (mediaTransformIntent) {
+    let assistantContent: string;
+
+    try {
+      const result = await transformCloudinaryImage(
+        mediaTransformIntent.imageUrl,
+        mediaTransformIntent.transformation,
+        mediaTransformIntent.options
+      );
+
+      console.log(
+        `[cloudinary:chat-transform] originalImageUrl=${mediaTransformIntent.imageUrl} detectedCloudName=${result.detectedCloudName} publicId=${result.originalPublicId} transformation=${mediaTransformIntent.transformation} finalTransformedUrl=${result.url}`
+      );
+
+      assistantContent = result.url;
+    } catch (err) {
+      assistantContent = `Cloudinary transformation failed: ${safeCloudinaryError(err)}`;
+    }
+
+    await addChatMessage(currentThreadId, dept, "assistant", assistantContent);
+
+    return new Response(textStream(assistantContent), {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "X-Cortex-Thread-Id": currentThreadId,
+        "X-Cortex-Media-Transform": mediaTransformIntent.transformation,
+      },
+    });
+  }
+
   let composioTool: string | null = null;
   const liveCtx = await fetchLiveToolContext(lastUserContent);
   if (liveCtx) {
@@ -48,18 +109,6 @@ export async function POST(req: NextRequest) {
   }
 
   const { stream } = await chatWithContext(messages, dept, crossDept);
-
-  const currentThreadId =
-    threadId ??
-    (await createConversation(
-      session.userId,
-      dept,
-      lastUserMessage?.content?.slice(0, 52) ?? "Conversation"
-    ));
-
-  if (lastUserMessage) {
-    await addChatMessage(currentThreadId, dept, "user", lastUserMessage.content);
-  }
 
   if (lastUserMessage) {
     extractContextFromMessage(lastUserMessage.content, dept)

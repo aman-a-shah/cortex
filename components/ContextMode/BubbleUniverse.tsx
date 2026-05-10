@@ -51,6 +51,29 @@ interface Props {
   onBubbleClick: (entry: ContextEntry) => void;
 }
 
+function polarityStatus(entry: ContextEntry): "pass" | "warning" | "fail" | "error" | null {
+  const metaStatus = entry.metadata?.status;
+  if (
+    metaStatus === "pass" ||
+    metaStatus === "warning" ||
+    metaStatus === "fail" ||
+    metaStatus === "error"
+  ) {
+    return metaStatus;
+  }
+
+  if (entry.source !== "ai-generated-code") return null;
+  const match = entry.summary.match(/\b(pass|warning|fail|error)\b/i);
+  return match ? (match[1].toLowerCase() as "pass" | "warning" | "fail" | "error") : "error";
+}
+
+const POLARITY_STATUS_COLOR = {
+  pass: "#3ecf8e",
+  warning: "#f2b84b",
+  fail: "#ff6b6b",
+  error: "#9ca3af",
+} as const;
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MIN_R = 30;
 const MAX_R = 78;
@@ -705,6 +728,16 @@ export default function BubbleUniverse({ entries }: Props) {
                   <circle r={2.5} cx={node.r * 0.55} cy={-node.r * 0.55}
                     fill={node.color} opacity={0.5}
                     style={{ pointerEvents: "none" }} />
+                )}
+
+                {polarityStatus(node.entry) && (
+                  <g transform={`translate(${node.r * 0.58}, ${node.r * 0.58})`} style={{ pointerEvents: "none" }}>
+                    <circle r={6} fill={POLARITY_STATUS_COLOR[polarityStatus(node.entry)!]} opacity={0.9} />
+                    <text y={0.5} textAnchor="middle" dominantBaseline="middle" fill="#111"
+                      style={{ fontSize: 7, fontWeight: 700, userSelect: "none" }}>
+                      P
+                    </text>
+                  </g>
                 )}
 
                 {/* Solar system orbit — SMIL animateTransform, no CSS conflict */}

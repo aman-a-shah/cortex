@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { department, text, summary, mediaUrl, mediaPublicId, source } = body;
+  const { department, text, summary, mediaUrl, mediaPublicId, source, metadata } = body;
 
   if (!department || !text || !summary) {
     return NextResponse.json(
@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
     mediaUrl,
     mediaPublicId,
     source,
+    metadata,
     tokenCount: Math.ceil(text.length / 4),
   }, session.userId);
 
