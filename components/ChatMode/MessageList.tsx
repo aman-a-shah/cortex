@@ -388,11 +388,8 @@ function MessageActions({
 }
 
 // ─── Composio tool label map ──────────────────────────────────────────────────
-const COMPOSIO_TOOL_LABELS: Record<string, { label: string; emoji: string }> = {
-  github:  { label: "GitHub",       emoji: "⚡" },
-  slack:   { label: "Slack",        emoji: "💬" },
-  notion:  { label: "Notion",       emoji: "📓" },
-  drive:   { label: "Google Drive", emoji: "📁" },
+const COMPOSIO_TOOL_LABELS: Record<string, { label: string; icon: string }> = {
+  slack: { label: "Slack", icon: "/slack.svg" },
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -525,7 +522,8 @@ export default function MessageList({ messages, streaming, streamContent, depart
                           color: "var(--green)",
                           letterSpacing: "0.01em",
                         }}>
-                          <span style={{ fontSize: 12 }}>{tool.emoji}</span>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={tool.icon} alt="" style={{ width: 14, height: 14, flexShrink: 0 }} />
                           <span style={{ fontWeight: 500 }}>Enhanced by Composio</span>
                           <span style={{ opacity: 0.55 }}>·</span>
                           <span style={{ opacity: 0.8 }}>{tool.label} live data injected</span>

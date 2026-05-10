@@ -8,13 +8,6 @@ const anthropic = new Anthropic({
 
 // Tool slugs mapped to our UI chips.
 export const TOOL_MAP = {
-  github: {
-    label: "GitHub",
-    marker: "GH",
-    defaultAction: "GITHUB_LIST_REPOS",
-    searchAction: "GITHUB_SEARCH_CODE",
-    description: "Fetch GitHub repos, PRs, issues, commits, or code references",
-  },
   slack: {
     label: "Slack",
     marker: "SL",
@@ -213,14 +206,10 @@ function readArray(obj: unknown, path: string[]): Record<string, unknown>[] {
 
 function buildParams(toolId: ToolId, action: string, query: string): Record<string, unknown> {
   switch (toolId) {
-    case "github":
-      return action.includes("SEARCH") ? { query, per_page: 5 } : { per_page: 10 };
     case "slack":
       return action.includes("SEARCH")
         ? { query, limit: 5, content_types: "messages", channel_types: "public_channel,private_channel" }
         : { limit: 10, types: "public_channel,private_channel", exclude_archived: true };
-    case "notion":
-      return action.includes("SEARCH") ? { query, page_size: 5 } : { page_size: 10 };
     default:
       return query ? { query } : {};
   }
@@ -241,9 +230,7 @@ export function formatToolResult(result: ComposioResult): string {
 
 // Keyword signals that strongly suggest a specific tool is relevant.
 const TOOL_SIGNALS: Record<ToolId, string[]> = {
-  github: ["github", "repository", "pull request", "pr #", "commit ", "branch ", "issue #", "ci/cd", "deploy pipeline", "open pr", "merge"],
   slack: ["slack", "slack channel", "#general", "#engineering", "#marketing", "#product", "slack message", "posted in slack"],
-  notion: ["notion", "notion page", "notion doc", "wiki", "runbook", "confluence"],
 };
 
 export function detectToolFromMessage(message: string): ToolId | null {

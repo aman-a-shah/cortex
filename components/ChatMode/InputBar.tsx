@@ -5,9 +5,7 @@ import { DEPT_CONFIG } from "@/lib/dept-config";
 import type { Department } from "@/types";
 
 const TOOL_CHIPS = [
-  { id: "github", label: "GitHub", emoji: "⚡", placeholder: 'e.g. "list my repos"' },
-  { id: "slack", label: "Slack", emoji: "💬", placeholder: 'e.g. "search #engineering"' },
-  { id: "notion", label: "Notion", emoji: "📓", placeholder: 'e.g. "find product docs"' },
+  { id: "slack", label: "Slack", icon: "/slack.svg", placeholder: 'e.g. "what did the team decide?"' },
 ] as const;
 
 type ToolId = (typeof TOOL_CHIPS)[number]["id"];
@@ -127,7 +125,7 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
       if (data.formatted && onToolResult) onToolResult(data.formatted);
       if (data.contextEntryId) {
         const chip = TOOL_CHIPS.find(c => c.id === toolId);
-        setContextSavedTool(chip ? `${chip.emoji} ${chip.label}` : toolId);
+        setContextSavedTool(chip ? chip.label : toolId);
         setTimeout(() => setContextSavedTool(null), 3000);
       }
     } catch {
@@ -202,7 +200,8 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
                   (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)";
                 }}
               >
-                <span>{chip.emoji}</span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={chip.icon} alt="" style={{ width: 16, height: 16, flexShrink: 0 }} />
                 <span>{chip.label}</span>
               </button>
             ))}
@@ -225,7 +224,8 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
               gap: 10,
             }}
           >
-            <span style={{ fontSize: 15 }}>{activeTool.emoji}</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={activeTool.icon} alt="" style={{ width: 17, height: 17, flexShrink: 0 }} />
             <input
               ref={chipInputRef}
               type="text"
@@ -386,7 +386,7 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
             {/* Tools */}
             <button
               onClick={() => { setToolsOpen((v) => !v); setActiveChip(null); }}
-              title="Composio tools"
+              title="Add Slack context"
               style={{
                 width: 32,
                 height: 32,
@@ -414,9 +414,8 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
                 }
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M2 4.5C2 3.12 3.12 2 4.5 2h5C10.88 2 12 3.12 12 4.5v.5H2v-.5Z" fill="currentColor" opacity="0.6" />
-                <rect x="2" y="5" width="10" height="7" rx="1.5" fill="currentColor" opacity="0.6" />
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M7 2.5v9M2.5 7h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
             </button>
 
