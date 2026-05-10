@@ -178,7 +178,7 @@ function wavyCirclePath(r: number, amplitude: number, phase: number, mouseAngle:
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function BubbleUniverse({ entries }: Props) {
+export default function BubbleUniverse({ entries, onBubbleClick }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const rafRef       = useRef<number>(0);
@@ -561,7 +561,7 @@ export default function BubbleUniverse({ entries }: Props) {
 
     dragRef.current = null;
     if (containerRef.current) containerRef.current.style.cursor = "";
-  }, [focusedId]);
+  }, [focusedId, onBubbleClick]);
 
   // ─── Derived ─────────────────────────────────────────────────────────────
   const { w, h } = dims;
@@ -948,6 +948,7 @@ function initParticles(particles: Particle[], w: number, h: number) {
 }
 
 function spawnParticles(particles: Particle[], dc: Record<Department, { x: number; y: number }>, nodes: BubbleNode[], w: number, h: number) {
+  if (particles.length > 500) return;
   const target = { signal: CONNECTIONS.length * 5, walker: Math.min(nodes.length * 3, 60), orbital: Math.min(nodes.length * 2, 40) };
   const counts = { signal: 0, walker: 0, orbital: 0 };
   for (const p of particles) { if (p.type in counts) counts[p.type as keyof typeof counts]++; }

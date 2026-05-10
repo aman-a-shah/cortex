@@ -1,4 +1,6 @@
 import { Composio } from "@composio/core";
+import { COMPOSIO_TIMEOUT_MS } from "@/lib/constants";
+import { logger } from "@/lib/logger";
 
 // Tool slugs mapped to our UI chips
 export const TOOL_MAP = {
@@ -207,7 +209,7 @@ This is an automated message. Please do not reply directly to this email.`;
       dangerouslySkipVersionCheck: true,
     });
   } catch (err) {
-    console.error("[composio] email notification failed", err instanceof Error ? err.message : err);
+    logger.error("composio", "email notification failed", err instanceof Error ? err.message : err);
   }
 }
 
@@ -227,6 +229,6 @@ export async function fetchLiveToolContext(
     return { toolId, ...ctx };
   });
 
-  const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 2500));
+  const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), COMPOSIO_TIMEOUT_MS));
   return Promise.race([toolPromise, timeout]);
 }

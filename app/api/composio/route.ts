@@ -3,6 +3,7 @@ import { executeTool, formatToolResult, toolResultToContextText, TOOL_MAP } from
 import { addContextEntry } from "@/lib/context-store";
 import { notifyContextChange } from "@/lib/pingram";
 import { verifyToken, TOKEN_COOKIE } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 import type { ToolId } from "@/lib/composio";
 import type { Department } from "@/types";
 
@@ -44,10 +45,10 @@ export async function POST(req: NextRequest) {
             department: session.department,
             summary: ctx.summary,
             source: `composio-${toolId}`,
-          }).catch(console.error);
+          }).catch(err => logger.error("composio", "context notify failed", err));
         }
       } catch (err) {
-        console.error("[composio] context entry creation failed", err);
+        logger.error("composio", "context entry creation failed", err);
       }
     }
   }

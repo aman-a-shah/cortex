@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import LoadingScreen from "@/components/LoadingScreen";
 import LoginScreen from "@/components/LoginScreen";
 import ModeToggle from "@/components/ModeToggle";
+import { HEARTBEAT_INTERVAL_MS } from "@/lib/constants";
 import type { Department } from "@/types";
 
 const ChatMode = dynamic(() => import("@/components/ChatMode"), { ssr: false });
@@ -68,7 +69,7 @@ export default function Home() {
       if (!document.hidden) fetch("/api/activity/heartbeat", { method: "POST" }).catch(() => {});
     };
     beat(); // immediate on login
-    const id = setInterval(beat, 30_000);
+    const id = setInterval(beat, HEARTBEAT_INTERVAL_MS);
     return () => clearInterval(id);
   }, [session]);
 

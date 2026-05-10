@@ -45,6 +45,7 @@ export default function LiveFeed({ entries, latest, onEntryClick }: Props) {
           cursor: "pointer",
           minHeight: 48,
         }}
+        title={collapsed ? "Expand context feed" : "Collapse context feed"}
         onClick={() => setCollapsed((v) => !v)}
       >
         <div
@@ -67,6 +68,11 @@ export default function LiveFeed({ entries, latest, onEntryClick }: Props) {
             </svg>
           </>
         )}
+        {collapsed && (
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" style={{ color: "var(--text-muted)", opacity: 0.5, flexShrink: 0 }}>
+            <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+          </svg>
+        )}
       </div>
 
       {/* Entry list */}
@@ -78,80 +84,31 @@ export default function LiveFeed({ entries, latest, onEntryClick }: Props) {
                 Context entries will appear here
               </p>
             </div>
-          ) : (
-            entries.slice(0, 30).map((entry, i) => {
-              const cfg = DEPT_CONFIG[entry.department];
-              const isNew = i === 0 && entry.id === latestIdRef.current;
-              return (
-                <button
-                  key={entry.id}
-                  onClick={() => onEntryClick(entry)}
-                  className={isNew ? "animate-feed-item-in" : ""}
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "10px 14px",
-                    border: "none",
-                    borderBottom: "1px solid var(--border)",
-                    background: "transparent",
-                    cursor: "pointer",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 5,
-                    transition: "background 0.12s ease",
-                  }}
-                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.03)")}
-                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        padding: "2px 6px",
-                        borderRadius: 6,
-                        background: cfg.color + "1a",
-                        color: cfg.color,
-                        fontWeight: 500,
-                      }}
-                    >
-                      {cfg.emoji} {cfg.label}
-                    </span>
-                    {isNew && (
-                      <span
-                        style={{
-                          fontSize: 10,
-                          padding: "1px 5px",
-                          borderRadius: 8,
-                          background: "var(--green-dim)",
-                          color: "var(--green)",
-                          fontWeight: 500,
-                        }}
-                      >
-                        NEW
+          ) : (() => {
+            const composioEntries = entries.filter(e => e.source?.startsWith("composio-")).slice(0, 3);
+            const regularEntries = entries.filter(e => !e.source?.startsWith("composio-")).slice(0, 27);
+            return (
+              <>
+                {composioEntries.length > 0 && (
+                  <>
+                    <div style={{ padding: "8px 14px 4px", borderBottom: "1px solid var(--border)" }}>
+                      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", color: "rgba(62,207,142,0.7)" }}>
+                        ⚡ LIVE FROM COMPOSIO
                       </span>
-                    )}
-                    <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: "auto" }}>
-                      {formatAgo(entry.createdAt)}
-                    </span>
-                  </div>
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: "var(--text-secondary)",
-                      margin: 0,
-                      lineHeight: 1.5,
-                      overflow: "hidden",
-                      display: "-webkit-box",
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: "vertical",
-                    }}
-                  >
-                    {entry.summary}
-                  </p>
-                </button>
-              );
-            })
-          )}
+                    </div>
+                    {composioEntries.map((entry) => (
+                      <FeedEntry key={entry.id} entry={entry} isNew={false} onEntryClick={onEntryClick} />
+                    ))}
+                    <div style={{ height: 4, borderBottom: "1px solid var(--border)" }} />
+                  </>
+                )}
+                {regularEntries.map((entry, i) => {
+                  const isNew = i === 0 && entry.id === latestIdRef.current;
+                  return <FeedEntry key={entry.id} entry={entry} isNew={isNew} onEntryClick={onEntryClick} />;
+                })}
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -170,6 +127,48 @@ export default function LiveFeed({ entries, latest, onEntryClick }: Props) {
         </div>
       )}
     </aside>
+  );
+}
+
+function FeedEntry({ entry, isNew, onEntryClick }: { entry: ContextEntry; isNew: boolean; onEntryClick: (e: ContextEntry) => void }) {
+  const cfg = DEPT_CONFIG[entry.department];
+  return (
+    <button
+      onClick={() => onEntryClick(entry)}
+      className={isNew ? "animate-feed-item-in" : ""}
+      style={{
+        width: "100%",
+        textAlign: "left",
+        padding: "10px 14px",
+        border: "none",
+        borderBottom: "1px solid var(--border)",
+        background: "transparent",
+        cursor: "pointer",
+        display: "flex",
+        flexDirection: "column",
+        gap: 5,
+        transition: "background 0.12s ease",
+      }}
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.03)")}
+      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 6, background: cfg.color + "1a", color: cfg.color, fontWeight: 500 }}>
+          {cfg.emoji} {cfg.label}
+        </span>
+        {isNew && (
+          <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 8, background: "var(--green-dim)", color: "var(--green)", fontWeight: 500 }}>
+            NEW
+          </span>
+        )}
+        <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: "auto" }}>
+          {formatAgo(entry.createdAt)}
+        </span>
+      </div>
+      <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, lineHeight: 1.5, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+        {entry.summary}
+      </p>
+    </button>
   );
 }
 

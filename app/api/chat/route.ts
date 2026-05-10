@@ -11,6 +11,7 @@ import {
 import { notifyDepartments, notifyContextChange } from "@/lib/pingram";
 import { fetchLiveToolContext } from "@/lib/composio";
 import { verifyToken, TOKEN_COOKIE } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 import type { Department, ContextEntry } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -84,12 +85,12 @@ export async function POST(req: NextRequest) {
               department: dept,
               summary: extracted.summary,
               source: "chat-extract",
-            }).catch(console.error);
+            }).catch(err => logger.error("chat", "context notify failed", err));
           }
-          console.log("[cortex] stored context:", entry.id);
+          logger.info("chat", `stored context: ${entry.id}`);
         }
       })
-      .catch(console.error);
+      .catch(err => logger.error("chat", "context extraction failed", err));
   }
 
   const trackedStream = new ReadableStream<Uint8Array>({

@@ -312,11 +312,15 @@ interface Props {
 }
 
 export default function MessageList({ messages, streaming, streamContent, department, userName }: Props) {
-  const cfg       = DEPT_CONFIG[department];
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const cfg          = DEPT_CONFIG[department];
+  const bottomRef    = useRef<HTMLDivElement>(null);
+  const scrollerRef  = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = scrollerRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamContent]);
 
   if (messages.length === 0 && !streaming) {
@@ -336,7 +340,7 @@ export default function MessageList({ messages, streaming, streamContent, depart
   }
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: "24px 24px 8px", display: "flex", flexDirection: "column", gap: 0 }}>
+    <div ref={scrollerRef} style={{ flex: 1, overflowY: "auto", padding: "24px 24px 8px", display: "flex", flexDirection: "column", gap: 0 }}>
       <div style={{ maxWidth: 720, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", gap: 6 }}>
 
         {messages.map((msg, idx) => {

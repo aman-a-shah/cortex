@@ -34,6 +34,7 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
   const [chipLoading, setChipLoading] = useState(false);
   const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [contextSavedTool, setContextSavedTool] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chipInputRef = useRef<HTMLInputElement>(null);
@@ -84,6 +85,7 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
     const file = e.target.files?.[0];
     if (!file) return;
     setImageUploading(true);
+    setImageError(null);
     const preview = URL.createObjectURL(file);
     const reader = new FileReader();
     reader.onload = async () => {
@@ -95,9 +97,14 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
           body: JSON.stringify({ base64Data, department: activeDept, contextId: Date.now().toString(), type: "context" }),
         });
         const data = await res.json();
-        if (data.url) setAttachedImage({ url: data.url, publicId: data.publicId, preview });
-      } catch { /* ignore */ }
-      finally {
+        if (data.url) {
+          setAttachedImage({ url: data.url, publicId: data.publicId, preview });
+        } else {
+          setImageError(data.error ?? "Upload failed");
+        }
+      } catch {
+        setImageError("Upload failed — check connection");
+      } finally {
         setImageUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
@@ -265,6 +272,14 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
             >
               ✕
             </button>
+          </div>
+        )}
+
+        {/* Image upload error */}
+        {imageError && (
+          <div style={{ background: "rgba(220,60,60,0.08)", border: "1px solid rgba(220,60,60,0.3)", borderRadius: 8, padding: "7px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12, color: "#e05c5c" }}>{imageError}</span>
+            <button onClick={() => setImageError(null)} style={{ background: "transparent", border: "none", color: "#e05c5c", cursor: "pointer", fontSize: 14, lineHeight: 1, marginLeft: "auto" }}>×</button>
           </div>
         )}
 
@@ -453,7 +468,7 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
                 background: canSend ? cfg.color : "var(--surface-3)",
                 border: "none",
                 color: canSend ? "#fff" : "var(--text-muted)",
-                cursor: canSend ? "pointer" : "default",
+                cursor: canSend ? "pointer" : "not-allowed",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",

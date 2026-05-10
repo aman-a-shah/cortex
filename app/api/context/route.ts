@@ -4,7 +4,11 @@ import { notifyDepartments } from "@/lib/pingram";
 import { verifyToken, TOKEN_COOKIE } from "@/lib/auth";
 import type { Department } from "@/types";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const token = req.cookies.get(TOKEN_COOKIE)?.value;
+  const session = token ? await verifyToken(token) : null;
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const entries = await getContextEntries();
   return NextResponse.json(entries);
 }

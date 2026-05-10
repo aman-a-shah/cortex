@@ -120,7 +120,7 @@ export default function ContextDetail({ entry, onClose }: Props) {
         </div>
 
         {/* Full text */}
-        <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 16px", lineHeight: 1.7, maxHeight: 200, overflowY: "auto" }}>
+        <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 16px", lineHeight: 1.7, maxHeight: 340, overflowY: "auto" }}>
           {entry.text}
         </p>
 
@@ -130,6 +130,7 @@ export default function ContextDetail({ entry, onClose }: Props) {
           <img
             src={entry.mediaUrl}
             alt="Context media"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
             style={{
               width: "100%",
               borderRadius: 10,
