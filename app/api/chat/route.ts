@@ -9,7 +9,7 @@ import {
   createConversation,
 } from "@/lib/chat-store";
 import { notifyDepartments } from "@/lib/pingram";
-import { fetchLiveToolContext, sendContextChangeEmail } from "@/lib/composio";
+import { fetchLiveToolContext } from "@/lib/composio";
 import { verifyToken, TOKEN_COOKIE } from "@/lib/auth";
 import type { Department, ContextEntry } from "@/types";
 
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   // Runs in parallel with other setup; 2.5s timeout so it never blocks the response.
   const lastUserContent = lastUserMessage?.content ?? "";
   let composioTool: string | null = null;
-  const liveCtx = await fetchLiveToolContext(lastUserContent);
+  const liveCtx = await fetchLiveToolContext(lastUserContent, session.userId);
   if (liveCtx) {
     composioTool = liveCtx.toolId;
     const composioEntry: ContextEntry = {
@@ -76,15 +76,6 @@ export async function POST(req: NextRequest) {
             sourceDept: dept,
             summary: extracted.summary,
           });
-          if (session.email) {
-            sendContextChangeEmail({
-              to: session.email,
-              senderName: session.name,
-              department: dept,
-              summary: extracted.summary,
-              source: "chat-extract",
-            }).catch(console.error);
-          }
           console.log("[cortex] stored context:", entry.id);
         }
       })
