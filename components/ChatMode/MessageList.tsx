@@ -329,6 +329,14 @@ function MessageActions({
   );
 }
 
+// ─── Composio tool label map ──────────────────────────────────────────────────
+const COMPOSIO_TOOL_LABELS: Record<string, { label: string; emoji: string }> = {
+  github:  { label: "GitHub",       emoji: "⚡" },
+  slack:   { label: "Slack",        emoji: "💬" },
+  notion:  { label: "Notion",       emoji: "📓" },
+  drive:   { label: "Google Drive", emoji: "📁" },
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 interface Props {
   messages: ChatMessage[];
@@ -430,22 +438,50 @@ export default function MessageList({ messages, streaming, streamContent, depart
 
               {/* Message content — minWidth:0 is critical for flex shrink to respect maxWidth */}
               <div style={{ maxWidth: "70%", minWidth: 0, display: "flex", flexDirection: "column", gap: 4, alignItems: isUser ? "flex-end" : "flex-start" }}>
-                <div style={{
-                  padding: isUser ? "9px 15px" : "12px 16px",
-                  borderRadius: isUser ? "18px 18px 4px 18px" : "4px 18px 18px 18px",
-                  fontSize: 14, lineHeight: 1.65,
-                  color: "var(--text-primary)",
-                  background: isUser ? cfg.color + "1e" : "var(--surface-2)",
-                  border: isUser ? `1px solid ${cfg.color}33` : "1px solid var(--border)",
-                  // Ensure content never overflows the bubble
-                  minWidth: 0,
-                  overflow: "hidden",
-                }}>
-                  {isUser
-                    ? <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, wordBreak: "break-word", overflowWrap: "break-word" }}>{msg.content}</p>
-                    : <MarkdownContent text={msg.content} accentColor={cfg.color} />
-                  }
-                </div>
+                {(() => {
+                  const tool = !isUser && msg.composioTool ? COMPOSIO_TOOL_LABELS[msg.composioTool] : null;
+                  return (
+                    <div style={{
+                      borderRadius: isUser ? "18px 18px 4px 18px" : "4px 18px 18px 18px",
+                      fontSize: 14, lineHeight: 1.65,
+                      color: "var(--text-primary)",
+                      background: isUser ? cfg.color + "1e" : "var(--surface-2)",
+                      border: isUser ? `1px solid ${cfg.color}33` : tool ? "1px solid rgba(62,207,142,0.25)" : "1px solid var(--border)",
+                      minWidth: 0,
+                      overflow: "hidden",
+                    }}>
+                      {/* Composio enhancement header — only on assistant messages with tool data */}
+                      {tool && (
+                        <div style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 7,
+                          padding: "7px 14px",
+                          background: "rgba(62,207,142,0.07)",
+                          borderBottom: "1px solid rgba(62,207,142,0.15)",
+                          fontSize: 11,
+                          color: "var(--green)",
+                          letterSpacing: "0.01em",
+                        }}>
+                          <span style={{ fontSize: 12 }}>{tool.emoji}</span>
+                          <span style={{ fontWeight: 500 }}>Enhanced by Composio</span>
+                          <span style={{ opacity: 0.55 }}>·</span>
+                          <span style={{ opacity: 0.8 }}>{tool.label} live data injected</span>
+                          <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, opacity: 0.7 }}>
+                            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--green)", display: "inline-block", animation: "live-dot 2s ease-in-out infinite" }} />
+                            live
+                          </span>
+                        </div>
+                      )}
+                      <div style={{ padding: isUser ? "9px 15px" : "12px 16px" }}>
+                        {isUser
+                          ? <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, wordBreak: "break-word", overflowWrap: "break-word" }}>{msg.content}</p>
+                          : <MarkdownContent text={msg.content} accentColor={cfg.color} />
+                        }
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Action bar for long assistant messages and generated code */}
                 {(isLong || hasCode) && (
@@ -476,14 +512,6 @@ export default function MessageList({ messages, streaming, streamContent, depart
                         </span>
                       );
                     })}
-                  </div>
-                )}
-
-                {/* Composio tool badge */}
-                {msg.composioTool && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--green)", padding: "2px 8px", borderRadius: 12, background: "var(--green-dim)", border: "1px solid rgba(62,207,142,0.2)", width: "fit-content" }}>
-                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--green)", display: "inline-block" }} />
-                    Enriched by {msg.composioTool}
                   </div>
                 )}
               </div>
