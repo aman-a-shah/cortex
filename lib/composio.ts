@@ -15,13 +15,6 @@ export const TOOL_MAP = {
     searchAction: "SLACK_ASSISTANT_SEARCH_CONTEXT",
     description: "Read Slack channels or search messages",
   },
-  notion: {
-    label: "Notion",
-    marker: "NT",
-    defaultAction: "NOTION_LIST_PAGES",
-    searchAction: "NOTION_SEARCH_PAGES",
-    description: "Search Notion pages and databases",
-  },
 } as const;
 
 export type ToolId = keyof typeof TOOL_MAP;
