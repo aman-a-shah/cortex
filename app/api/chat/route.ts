@@ -8,7 +8,7 @@ import {
   addChatMessage,
   createConversation,
 } from "@/lib/chat-store";
-import { notifyDepartments } from "@/lib/pingram";
+import { notifyDepartments, notifyContextChange } from "@/lib/pingram";
 import { fetchLiveToolContext } from "@/lib/composio";
 import { verifyToken, TOKEN_COOKIE } from "@/lib/auth";
 import type { Department, ContextEntry } from "@/types";
@@ -76,6 +76,16 @@ export async function POST(req: NextRequest) {
             sourceDept: dept,
             summary: extracted.summary,
           });
+          if (session.email) {
+            notifyContextChange({
+              userId: session.userId,
+              email: session.email,
+              name: session.name,
+              department: dept,
+              summary: extracted.summary,
+              source: "chat-extract",
+            }).catch(console.error);
+          }
           console.log("[cortex] stored context:", entry.id);
         }
       })

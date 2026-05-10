@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createConnectLink, executeTool, formatToolResult, hasActiveConnection, toolResultToContextText, TOOL_MAP } from "@/lib/composio";
 import { addContextEntry } from "@/lib/context-store";
+import { notifyContextChange } from "@/lib/pingram";
 import { verifyToken, TOKEN_COOKIE } from "@/lib/auth";
 import type { ToolId } from "@/lib/composio";
 import type { Department } from "@/types";
@@ -57,6 +58,16 @@ export async function POST(req: NextRequest) {
           session.userId
         );
         contextEntryId = entry.id;
+        if (session.email) {
+          notifyContextChange({
+            userId: session.userId,
+            email: session.email,
+            name: session.name,
+            department: session.department,
+            summary: ctx.summary,
+            source: `composio-${toolId}`,
+          }).catch(console.error);
+        }
       } catch (err) {
         console.error("[composio] context entry creation failed", err);
       }
