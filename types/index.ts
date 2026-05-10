@@ -18,8 +18,12 @@ export interface ContextEntry {
   tokenCount: number;
   backboardSyncedAt?: string;
   backboardSyncError?: string;
+<<<<<<< HEAD
   createdByUserId?: string;
   createdByName?: string;
+=======
+  metadata?: Record<string, unknown>;
+>>>>>>> 4bb561209135c2baebc0794bba7497e6a8b70e2f
 }
 
 export interface ChatMessage {
@@ -30,6 +34,22 @@ export interface ChatMessage {
   contextRefs?: string[];
   composioTool?: string;
   timestamp: string;
+}
+
+export interface PolarityScanIssue {
+  severity: "low" | "medium" | "high";
+  title: string;
+  description: string;
+}
+
+export interface PolarityScanResult {
+  score: number | null;
+  status: "pass" | "warning" | "fail" | "error";
+  securityIssues: number | null;
+  maintainability: "high" | "medium" | "low" | "unknown";
+  issues: PolarityScanIssue[];
+  rawOutput: string;
+  stderr: string;
 }
 
 export interface ComposioTool {

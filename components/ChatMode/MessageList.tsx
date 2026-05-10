@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DEPT_CONFIG } from "@/lib/dept-config";
-import type { ChatMessage, Department } from "@/types";
+import type { ChatMessage, Department, PolarityScanResult } from "@/types";
+import PolarityScanCard from "./PolarityScanCard";
 
 // ─── PDF export ───────────────────────────────────────────────────────────────
 function escHtml(s: string) {
@@ -69,6 +70,13 @@ function splitCodeBlocks(raw: string): Segment[] {
   }
   if (last < raw.length) segments.push({ type: "text", content: raw.slice(last) });
   return segments;
+}
+
+function codeBlocks(raw: string): { lang: string; code: string }[] {
+  return splitCodeBlocks(raw)
+    .filter((seg): seg is Extract<Segment, { type: "code" }> => seg.type === "code")
+    .map((seg) => ({ lang: seg.lang || "text", code: seg.code.trim() }))
+    .filter((block) => block.code.length > 0);
 }
 
 function renderInline(text: string): React.ReactNode[] {
@@ -245,7 +253,17 @@ function MarkdownContent({ text, accentColor }: { text: string; accentColor: str
 }
 
 // Action bar shown below long assistant messages
-function MessageActions({ text }: { text: string }) {
+function MessageActions({
+  text,
+  canScan,
+  scanning,
+  onScan,
+}: {
+  text: string;
+  canScan: boolean;
+  scanning: boolean;
+  onScan: () => void;
+}) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -290,6 +308,23 @@ function MessageActions({ text }: { text: string }) {
       >
         ↓ Save as PDF
       </button>
+      {canScan && (
+        <button
+          onClick={onScan}
+          disabled={scanning}
+          style={{
+            display: "flex", alignItems: "center", gap: 5,
+            background: scanning ? "var(--surface-3)" : "rgba(99,102,241,0.14)",
+            border: "1px solid rgba(99,102,241,0.35)",
+            borderRadius: 6, padding: "3px 10px", cursor: scanning ? "default" : "pointer",
+            fontSize: 11, color: "rgb(129,140,248)",
+            transition: "color 0.15s, border-color 0.15s",
+            opacity: scanning ? 0.7 : 1,
+          }}
+        >
+          {scanning ? "Scanning..." : "Scan with Polarity"}
+        </button>
+      )}
     </div>
   );
 }
@@ -312,9 +347,16 @@ interface Props {
 }
 
 export default function MessageList({ messages, streaming, streamContent, department, userName }: Props) {
+<<<<<<< HEAD
   const cfg          = DEPT_CONFIG[department];
   const bottomRef    = useRef<HTMLDivElement>(null);
   const scrollerRef  = useRef<HTMLDivElement>(null);
+=======
+  const cfg       = DEPT_CONFIG[department];
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const [scanResults, setScanResults] = useState<Record<string, PolarityScanResult>>({});
+  const [scanLoading, setScanLoading] = useState<Record<string, boolean>>({});
+>>>>>>> 4bb561209135c2baebc0794bba7497e6a8b70e2f
 
   useEffect(() => {
     const el = scrollerRef.current;
@@ -322,6 +364,46 @@ export default function MessageList({ messages, streaming, streamContent, depart
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
     if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamContent]);
+
+  async function scanMessage(message: ChatMessage) {
+    const blocks = codeBlocks(message.content);
+    if (blocks.length === 0) return;
+
+    setScanLoading((prev) => ({ ...prev, [message.id]: true }));
+    try {
+      const res = await fetch("/api/polarity/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: blocks.map((block) => block.code).join("\n\n"),
+          language: blocks[0].lang,
+          department,
+          messageId: message.id,
+        }),
+      });
+      const data: PolarityScanResult = await res.json();
+      setScanResults((prev) => ({ ...prev, [message.id]: data }));
+    } catch (error) {
+      setScanResults((prev) => ({
+        ...prev,
+        [message.id]: {
+          score: null,
+          status: "error",
+          securityIssues: null,
+          maintainability: "unknown",
+          issues: [{
+            severity: "high",
+            title: "Polarity scan failed",
+            description: error instanceof Error ? error.message : "Unable to scan generated code.",
+          }],
+          rawOutput: "",
+          stderr: error instanceof Error ? error.message : "Unable to scan generated code.",
+        },
+      }));
+    } finally {
+      setScanLoading((prev) => ({ ...prev, [message.id]: false }));
+    }
+  }
 
   if (messages.length === 0 && !streaming) {
     return (
@@ -348,6 +430,7 @@ export default function MessageList({ messages, streaming, streamContent, depart
           const prevMsg   = idx > 0 ? messages[idx - 1] : null;
           const showAvatar = !isUser && prevMsg?.role !== "assistant";
           const isLong    = !isUser && msg.content.length > 350;
+          const hasCode   = !isUser && codeBlocks(msg.content).length > 0;
 
           return (
             <div
@@ -409,8 +492,23 @@ export default function MessageList({ messages, streaming, streamContent, depart
                   );
                 })()}
 
-                {/* Action bar for long assistant messages */}
-                {isLong && <MessageActions text={msg.content} />}
+                {/* Action bar for long assistant messages and generated code */}
+                {(isLong || hasCode) && (
+                  <MessageActions
+                    text={msg.content}
+                    canScan={hasCode}
+                    scanning={Boolean(scanLoading[msg.id])}
+                    onScan={() => scanMessage(msg)}
+                  />
+                )}
+
+                {scanResults[msg.id] && (
+                  <PolarityScanCard
+                    result={scanResults[msg.id]}
+                    department={department}
+                    messageId={msg.id}
+                  />
+                )}
 
                 {/* Context dept refs */}
                 {msg.contextRefs && msg.contextRefs.length > 0 && (

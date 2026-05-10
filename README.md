@@ -2,6 +2,33 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+Create `.env.local` with the required Cloudinary server-side credentials:
+
+```bash
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
+
+## Polarity Keystone Setup
+
+Install and authenticate the real Keystone CLI:
+
+```bash
+curl -fsSL https://ks.polarity.so/install.sh | bash
+ks --version
+ks setup
+```
+
+Optional `.env.local` settings:
+
+```bash
+POLARITY_CLI_COMMAND=ks
+KEYSTONE_API_KEY=your_key_optional
+```
+
+`KEYSTONE_API_KEY` must stay server-side. The frontend never receives the key; the chat scan button calls the backend `/api/polarity/scan` route, and that route invokes the real `ks` CLI.
+
 First, run the development server:
 
 ```bash

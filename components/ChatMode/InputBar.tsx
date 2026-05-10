@@ -8,7 +8,6 @@ const TOOL_CHIPS = [
   { id: "github", label: "GitHub", emoji: "⚡", placeholder: 'e.g. "list my repos"' },
   { id: "slack", label: "Slack", emoji: "💬", placeholder: 'e.g. "search #engineering"' },
   { id: "notion", label: "Notion", emoji: "📓", placeholder: 'e.g. "find product docs"' },
-  { id: "drive", label: "Drive", emoji: "📁", placeholder: 'e.g. "Q3 budget files"' },
 ] as const;
 
 type ToolId = (typeof TOOL_CHIPS)[number]["id"];
@@ -89,7 +88,7 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
     const preview = URL.createObjectURL(file);
     const reader = new FileReader();
     reader.onload = async () => {
-      const base64Data = (reader.result as string).split(",")[1];
+      const base64Data = reader.result as string;
       try {
         const res = await fetch("/api/media", {
           method: "POST",
@@ -121,6 +120,10 @@ export default function InputBar({ onSend, onToolResult, disabled, activeDept }:
         body: JSON.stringify({ toolId, query: chipQuery }),
       });
       const data = await res.json();
+      if (res.status === 409 && data.redirectUrl) {
+        window.location.href = data.redirectUrl;
+        return;
+      }
       if (data.formatted && onToolResult) onToolResult(data.formatted);
       if (data.contextEntryId) {
         const chip = TOOL_CHIPS.find(c => c.id === toolId);

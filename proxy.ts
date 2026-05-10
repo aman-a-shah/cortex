@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken, TOKEN_COOKIE } from "@/lib/auth";
 
-const PROTECTED_API_PREFIXES = ["/api/chat", "/api/context", "/api/aucctus", "/api/media", "/api/notify", "/api/composio"];
+const PROTECTED_API_PREFIXES = ["/api/chat", "/api/context", "/api/aucctus", "/api/media", "/api/polarity", "/api/notify", "/api/composio"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -25,5 +25,5 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/chat/:path*", "/api/context/:path*", "/api/aucctus/:path*", "/api/media/:path*", "/api/notify/:path*", "/api/composio/:path*"],
+  matcher: ["/api/chat/:path*", "/api/context/:path*", "/api/aucctus/:path*", "/api/media/:path*", "/api/polarity/:path*", "/api/notify/:path*", "/api/composio/:path*"],
 };
