@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     source,
     metadata: enrichedMetadata,
     tokenCount: Math.ceil(scan.cleaned.length / 4),
-  }, session.userId);
+  }, session.userId === "mcp" ? undefined : session.userId);
 
   notifyContextEntryCreated({ entry, actorSession: session }).catch((err) =>
     console.warn("[context] notify fan-out failed", err)

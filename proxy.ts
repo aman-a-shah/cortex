@@ -8,6 +8,12 @@ export async function proxy(req: NextRequest) {
   const isProtected = PROTECTED_API_PREFIXES.some((p) => pathname.startsWith(p));
   if (!isProtected) return NextResponse.next();
 
+  const mcpToken = process.env.CORTEX_MCP_TOKEN;
+  if (mcpToken) {
+    const auth = req.headers.get("authorization") ?? "";
+    if (auth === `Bearer ${mcpToken}`) return NextResponse.next();
+  }
+
   const token = req.cookies.get(TOKEN_COOKIE)?.value;
   if (!token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
