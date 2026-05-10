@@ -38,7 +38,8 @@ function isBackboardConfigured(): boolean {
 
 function buildSystemPrompt(
   department: Department,
-  crossDeptContext: ContextEntry[]
+  crossDeptContext: ContextEntry[],
+  peerExperiences: ContextEntry[] = []
 ): string {
   const contextBlock =
     crossDeptContext.length > 0
@@ -50,11 +51,67 @@ function buildSystemPrompt(
           .join("\n\n")}`
       : "";
 
+  const peerBlock =
+    peerExperiences.length > 0
+      ? `\n\nPEER EXPERIENCES — colleagues who encountered similar situations:\n${peerExperiences
+          .map((e) => {
+            const who = e.createdByName ?? "A colleague";
+            const dept = e.department.charAt(0).toUpperCase() + e.department.slice(1);
+            return `• ${who} (${dept}): ${e.summary}\n  Detail: ${e.text.slice(0, 300)}${e.text.length > 300 ? "…" : ""}`;
+          })
+          .join("\n\n")}\n\nIf the user's question relates to one of these peer experiences, naturally mention it — e.g. "Interestingly, [Name] from [Dept] ran into something similar and found that…". Only reference them when genuinely relevant; do not force it.`
+      : "";
+
   return `You are Cortex, the AI agent for the ${department} department.
 
 You are connected to a shared company memory. Use the latest cross-department context when it affects your answer. If design, finance, legal, marketing, product, management, or engineering has established a constraint, preference, decision, plan, budget, policy, or goal, follow it without requiring the user to restate it.
 
-Be concise and actionable. When useful, mention which department context influenced your answer.${contextBlock}`;
+Be concise and actionable. When useful, mention which department context influenced your answer.${contextBlock}${peerBlock}`;
+}
+
+const STOP_WORDS = new Set([
+  "the","and","for","are","but","not","you","all","can","had","her","was","one","our","out","day","get","has","him","his","how","man","new","now","old","see","two","way","who","boy","did","its","let","put","say","she","too","use","that","this","with","have","from","they","will","been","each","which","there","their","what","when","were","what","your","also","into","than","then","them","these","some","like","more","just","over","such","even","most","make","also","after","about","would","could","should","other","been","said","want","here","know","does","very","only","well","back","come","give","good","look","most","move","need","next","only","open","over","same","seem","show","take","than","then","time","turn","used","want","well","work",
+]);
+
+// Keyword-overlap similarity: returns entries (from other users) whose summary/text
+// share at least MIN_OVERLAP meaningful words with the given message.
+const MIN_OVERLAP = 2;
+
+function extractKeywords(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 3 && !STOP_WORDS.has(w))
+  );
+}
+
+export function findSimilarEntries(
+  message: string,
+  currentUserId: string,
+  allEntries: ContextEntry[],
+  maxResults = 3
+): ContextEntry[] {
+  const msgKeywords = extractKeywords(message);
+  if (msgKeywords.size === 0) return [];
+
+  const scored = allEntries
+    .filter((e) => e.createdByUserId && e.createdByUserId !== currentUserId && e.createdByName)
+    .map((e) => {
+      const entryKeywords = extractKeywords(`${e.summary} ${e.text}`);
+      let overlap = 0;
+      for (const kw of msgKeywords) {
+        if (entryKeywords.has(kw)) overlap++;
+      }
+      return { entry: e, overlap };
+    })
+    .filter(({ overlap }) => overlap >= MIN_OVERLAP)
+    .sort((a, b) => b.overlap - a.overlap)
+    .slice(0, maxResults)
+    .map(({ entry }) => entry);
+
+  return scored;
 }
 
 function contextSyncMessage(entry: ContextEntry): string {
@@ -216,9 +273,10 @@ export async function syncContextToBackboard(
 export async function chatWithContext(
   messages: { role: "user" | "assistant"; content: string }[],
   department: Department,
-  crossDeptContext: ContextEntry[]
+  crossDeptContext: ContextEntry[],
+  peerExperiences: ContextEntry[] = []
 ): Promise<ChatStreamResult> {
-  const systemPrompt = buildSystemPrompt(department, crossDeptContext);
+  const systemPrompt = buildSystemPrompt(department, crossDeptContext, peerExperiences);
 
   if (isBackboardConfigured()) {
     const stream = await backboardGlobalChat(

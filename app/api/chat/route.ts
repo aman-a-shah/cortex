@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
-import { chatWithContext, extractContextFromMessage } from "@/lib/backboard";
+import { chatWithContext, extractContextFromMessage, findSimilarEntries } from "@/lib/backboard";
 import {
   getCrossDepContext,
+  getContextEntries,
   addContextEntry,
 } from "@/lib/context-store";
 import {
@@ -11,6 +12,7 @@ import {
 import { notifyDepartments, notifyContextChange } from "@/lib/pingram";
 import { fetchLiveToolContext } from "@/lib/composio";
 import { verifyToken, TOKEN_COOKIE } from "@/lib/auth";
+import { registerUser } from "@/lib/user-registry";
 import { logger } from "@/lib/logger";
 import type { Department, ContextEntry } from "@/types";
 
@@ -23,7 +25,14 @@ export async function POST(req: NextRequest) {
 
   const { messages, threadId } = await req.json();
   const dept = session.department as Department;
-  const crossDept = await getCrossDepContext(dept);
+
+  // Register this user so context entries they create can be attributed by name
+  registerUser(session.userId, session.name);
+
+  const [crossDept, allEntries] = await Promise.all([
+    getCrossDepContext(dept),
+    getContextEntries(),
+  ]);
 
   const lastUserMessage = [...messages]
     .reverse()
@@ -48,7 +57,10 @@ export async function POST(req: NextRequest) {
     crossDept.unshift(composioEntry);
   }
 
-  const { stream } = await chatWithContext(messages, dept, crossDept);
+  // Find similar past experiences from other users to surface in the LLM response
+  const peerExperiences = findSimilarEntries(lastUserContent, session.userId, allEntries);
+
+  const { stream } = await chatWithContext(messages, dept, crossDept, peerExperiences);
 
   const currentThreadId =
     threadId ??

@@ -3,6 +3,7 @@ import { getSupabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 import { syncContextToBackboard } from "@/lib/backboard";
 import { logger } from "@/lib/logger";
 import { CROSS_DEPT_SLICE } from "@/lib/constants";
+import { getUserName } from "@/lib/user-registry";
 
 const store: ContextEntry[] = [];
 
@@ -18,9 +19,11 @@ interface ContextRow {
   token_count: number | null;
   backboard_synced_at: string | null;
   backboard_sync_error: string | null;
+  created_by: string | null;
 }
 
 function mapContextRow(row: ContextRow): ContextEntry {
+  const createdByUserId = row.created_by ?? undefined;
   return {
     id: row.id,
     department: row.department_id,
@@ -33,6 +36,8 @@ function mapContextRow(row: ContextRow): ContextEntry {
     tokenCount: row.token_count ?? Math.ceil(row.text.length / 4),
     backboardSyncedAt: row.backboard_synced_at ?? undefined,
     backboardSyncError: row.backboard_sync_error ?? undefined,
+    createdByUserId,
+    createdByName: createdByUserId ? (getUserName(createdByUserId) ?? undefined) : undefined,
   };
 }
 
@@ -42,7 +47,7 @@ export async function getContextEntries(): Promise<ContextEntry[]> {
       const { data, error } = await getSupabaseAdmin()
         .from("context_entries")
         .select(
-          "id,department_id,text,summary,media_url,media_public_id,source,created_at,token_count,backboard_synced_at,backboard_sync_error"
+          "id,department_id,text,summary,media_url,media_public_id,source,created_at,token_count,backboard_synced_at,backboard_sync_error,created_by"
         )
         .order("created_at", { ascending: false });
 
@@ -152,6 +157,8 @@ export async function addContextEntry(
     ...entry,
     id: `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     createdAt: new Date().toISOString(),
+    createdByUserId: createdBy,
+    createdByName: createdBy ? (getUserName(createdBy) ?? undefined) : undefined,
   };
   store.unshift(newEntry);
   return newEntry;

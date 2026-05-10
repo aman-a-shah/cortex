@@ -18,6 +18,8 @@ export interface ContextEntry {
   tokenCount: number;
   backboardSyncedAt?: string;
   backboardSyncError?: string;
+  createdByUserId?: string;
+  createdByName?: string;
 }
 
 export interface ChatMessage {
