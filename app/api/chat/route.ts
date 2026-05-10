@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
   }
 
   let composioTool: string | null = null;
-  const liveCtx = await fetchLiveToolContext(lastUserContent);
+  const liveCtx = await fetchLiveToolContext(lastUserContent, session.userId);
   if (liveCtx) {
     composioTool = liveCtx.toolId;
     const composioEntry: ContextEntry = {
