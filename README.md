@@ -4,7 +4,17 @@
 
 Cortex is a real-time, shared global context engine designed to solve the "Context Silo" problem in corporate AI workflows. Built for **soon hackathon #1**, Cortex ensures that every agentic interaction—from engineering to finance—is powered by a single, evolving source of truth.
 
-## 🚀 The Vision
+## 📸 Screenshots
+
+<div align="center">
+  <img src="references/Screenshot 2026-05-10 at 4.25.51 AM.png" width="800" alt="Cortex Workflow Initial" />
+  <br/>
+  <img src="references/Screenshot 2026-05-10 at 4.27.19 AM.png" width="800" alt="Cortex Context Bank" />
+  <img src="references/Screenshot 2026-05-10 at 4.27.43 AM.png" width="800" alt="Cortex Context Bank" />
+  <img src="references/Screenshot 2026-05-10 at 4.28.20 AM.png" width="800" alt="Cortex Context Bank" />
+</div>
+
+## � The Vision
 
 In the modern enterprise, context is managed poorly. Individuals manually feed agents files, rules, and snippets session-by-session. This leads to:
 - **Inconsistency:** Different team members receive different answers for the same policy.
